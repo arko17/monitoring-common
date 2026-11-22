@@ -1,6 +1,6 @@
 # Managed by Ansible.
 route:
-  receiver: {{ 'matrix' if stack_matrix_receiver else ('ntfy' if ntfy_alerts.url else 'null') }}
+  receiver: "{{ 'matrix' if stack_matrix_receiver else ('ntfy' if ntfy_alerts.url else 'null') }}"
   group_by: [alertname, site, instance]
   group_wait: 30s
   group_interval: 5m
@@ -8,7 +8,7 @@ route:
   routes:
     # Dead man's switch → healthchecks.io (alerts there if pings stop)
     - matchers: ['alertname="Watchdog"']
-      receiver: {{ 'healthchecks' if healthchecks_watchdog_url else 'null' }}
+      receiver: "{{ 'healthchecks' if healthchecks_watchdog_url else 'null' }}"
       group_wait: 0s
       group_interval: 1m
       repeat_interval: 1m

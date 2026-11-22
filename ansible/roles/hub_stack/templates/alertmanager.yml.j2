@@ -7,7 +7,7 @@ route:
   repeat_interval: 12h
   routes:
     - matchers: ['alertname="Watchdog"']
-      receiver: {{ 'healthchecks' if hub_healthchecks_watchdog_url else 'null' }}
+      receiver: "{{ 'healthchecks' if hub_healthchecks_watchdog_url else 'null' }}"
       group_wait: 0s
       group_interval: 1m
       repeat_interval: 1m
