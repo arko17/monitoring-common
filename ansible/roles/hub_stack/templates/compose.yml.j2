@@ -1,0 +1,115 @@
+# Managed by Ansible (common/ansible/roles/hub_stack). Do not edit on the host.
+name: hub
+
+x-defaults: &defaults
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  caddy:
+    <<: *defaults
+    image: {{ hub_images.caddy }}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  victoriametrics:
+    <<: *defaults
+    image: {{ hub_images.victoriametrics }}
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod={{ hub_retention }}
+      - -selfScrapeInterval=0
+    volumes: ["{{ (hub_data_dir ~ '/victoriametrics') if hub_data_dir else 'vm-data' }}:/storage"]
+
+  vmagent:   # scrapes the hub itself (site=hub)
+    <<: *defaults
+    image: {{ hub_images.vmagent }}
+    command:
+      - -promscrape.config=/etc/vmagent/scrape.yml
+      - -remoteWrite.url=http://victoriametrics:8428/api/v1/write
+      - -remoteWrite.label=site=hub
+      - -remoteWrite.tmpDataPath=/vmagent-data
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - ./vmagent:/etc/vmagent:ro
+      - "{{ (hub_data_dir ~ '/vmagent') if hub_data_dir else 'vmagent-data' }}:/vmagent-data"
+
+  vmalert:
+    <<: *defaults
+    image: {{ hub_images.vmalert }}
+    command:
+      - -rule=/etc/vmalert/rules/*.yml
+      - -datasource.url=http://victoriametrics:8428
+      - -remoteWrite.url=http://victoriametrics:8428
+      - -remoteRead.url=http://victoriametrics:8428
+      - -notifier.url=http://alertmanager:9093
+      - -external.url=https://{{ hub_hosts.grafana }}
+      - -evaluationInterval=1m
+    volumes: [./rules:/etc/vmalert/rules:ro]
+    depends_on: [victoriametrics, alertmanager]
+
+  alertmanager:
+    <<: *defaults
+    image: {{ hub_images.alertmanager }}
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+      - am-data:/alertmanager
+
+  grafana:
+    <<: *defaults
+    image: {{ hub_images.grafana }}
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /etc/grafana/admin-password
+      GF_SERVER_ROOT_URL: https://{{ hub_hosts.grafana }}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/admin-password:/etc/grafana/admin-password:ro
+
+  gatus:
+    <<: *defaults
+    image: {{ hub_images.gatus }}
+    cap_add: [NET_RAW]   # icmp:// checks
+    environment: {GATUS_CONFIG_PATH: /config/config.yaml}
+    volumes:
+      - ./gatus:/config:ro
+      - gatus-data:/data
+
+  ntfy:
+    <<: *defaults
+    image: {{ hub_images.ntfy }}
+    command: [serve]
+    volumes:
+      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy-cache:/var/cache/ntfy
+      - ntfy-lib:/var/lib/ntfy
+
+  beszel:   # hub for private devices (own workstations, family PCs)
+    <<: *defaults
+    image: {{ hub_images.beszel }}
+    environment:
+      APP_URL: https://{{ hub_hosts.beszel }}
+    volumes: [beszel-data:/beszel_data]
+
+volumes:
+  caddy-data:
+  caddy-config:
+  vm-data:
+  vmagent-data:
+  am-data:
+  grafana-data:
+  gatus-data:
+  ntfy-cache:
+  ntfy-lib:
+  beszel-data:

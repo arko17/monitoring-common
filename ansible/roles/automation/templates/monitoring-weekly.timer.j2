@@ -1,0 +1,10 @@
+[Unit]
+Description=Monitoring automation (weekly)
+
+[Timer]
+OnCalendar={{ automation_weekly_time }}
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

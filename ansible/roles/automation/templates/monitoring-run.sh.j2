@@ -1,0 +1,46 @@
+#!/bin/bash
+# Managed by Ansible. Usage: monitoring-run nightly|weekly
+#   nightly: git pull + apply the monitoring stack on this host (new image tags, configs, targets)
+#   weekly : git pull + full playbook (exporters/agents on all hosts of the site)
+set -euo pipefail
+job="${1:?nightly|weekly}"
+repo="{{ automation_repo_dir }}"
+textfile="{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile') }}/monitoring_job_${job}.prom"
+case "$job" in
+  nightly) hc="{{ automation_hc_nightly_url }}"; args=(--tags stack --limit "{{ inventory_hostname }}") ;;
+  weekly)  hc="{{ automation_hc_weekly_url }}";  args=() ;;
+  *) echo "unknown job $job" >&2; exit 2 ;;
+esac
+
+# ping <suffix> [curl args...]  — healthchecks.io ping, never fails the job
+ping() { local suffix="$1"; shift; [ -n "$hc" ] || return 0; curl -fsS -m 10 --retry 3 "$@" "$hc$suffix" -o /dev/null || true; }
+ping /start
+
+export GIT_SSH_COMMAND="ssh -i {{ automation_ssh_key }} -o StrictHostKeyChecking=accept-new"
+export ANSIBLE_PRIVATE_KEY_FILE="{{ automation_ssh_key }}"
+export ANSIBLE_HOST_KEY_CHECKING=False
+export ANSIBLE_FORCE_COLOR=0
+export MONITORING_LOCAL=1   # inventory: ansible_connection=local for the stack host itself
+
+cd "$repo"
+log=$(mktemp)
+if {
+  git fetch --quiet origin &&
+  git reset --quiet --hard origin/main &&
+  git submodule update --init --recursive --quiet &&
+  ansible-playbook -i inventory.yml site.yml \
+    --vault-password-file "{{ automation_vault_password_file }}" "${args[@]}"
+} >"$log" 2>&1; then
+  cat > "$textfile.tmp" <<PROM
+# TYPE monitoring_job_last_success_timestamp_seconds gauge
+monitoring_job_last_success_timestamp_seconds{job_name="$job"} $(date +%s)
+PROM
+  mv "$textfile.tmp" "$textfile"
+  tail -c 9000 "$log" | ping "" --data-binary @-
+  cat "$log"; rm -f "$log"
+else
+  rc=$?
+  tail -c 9000 "$log" | ping /fail --data-binary @-
+  cat "$log"; rm -f "$log"
+  exit $rc
+fi

@@ -1,0 +1,112 @@
+- name: Validate hub configuration
+  ansible.builtin.assert:
+    that:
+      - hub_domain | length > 0
+      - hub_grafana_admin_password | length > 0
+      - hub_ntfy_admin_password | length > 0
+      - hub_ntfy_publishers | selectattr('name', 'equalto', 'hub') | list | length == 1
+      - hub_ntfy_publishers | map(attribute='token') | select('match', '^tk_[A-Za-z0-9]{29}$') | list | length == hub_ntfy_publishers | length
+    fail_msg: "Incomplete hub configuration (domain, passwords, ntfy tokens 'tk_'+29 chars, publisher named 'hub')."
+
+- name: Data directory on the separate volume
+  when: hub_data_dir | length > 0
+  block:
+    - name: Check that the volume is mounted
+      ansible.builtin.command: findmnt --target {{ hub_data_dir | dirname }} --noheadings --output TARGET
+      register: _mnt
+      changed_when: false
+      failed_when: _mnt.stdout | trim == '/'
+    - name: Create data directories
+      ansible.builtin.file:
+        path: "{{ hub_data_dir }}/{{ item }}"
+        state: directory
+        mode: "0750"
+      loop: [victoriametrics, vmagent]
+    - name: Docker drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/docker.service.d
+        state: directory
+        mode: "0755"
+    - name: Docker waits for the volume
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/docker.service.d/10-wait-for-volume.conf
+        mode: "0644"
+        content: |
+          [Unit]
+          RequiresMountsFor={{ hub_data_dir }}
+      register: _dropin
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: _dropin.changed
+
+- name: Hub base directory
+  ansible.builtin.file:
+    path: "{{ hub_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Hub directories
+  ansible.builtin.file:
+    path: "{{ hub_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"   # containers like alertmanager (nobody) and grafana (472) must traverse
+  loop: [caddy, vmagent, rules, alertmanager, gatus, ntfy, grafana/provisioning/datasources, grafana/provisioning/dashboards,
+         grafana/provisioning/plugins, grafana/provisioning/alerting, grafana/dashboards]
+
+- name: Render configs
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ hub_dir }}/{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - {src: Caddyfile.j2, dest: caddy/Caddyfile}
+    - {src: scrape.yml.j2, dest: vmagent/scrape.yml}
+    - {src: hub-rules.yml.j2, dest: rules/hub.yml}
+    - {src: alertmanager.yml.j2, dest: alertmanager/alertmanager.yml}
+    - {src: gatus.yaml.j2, dest: gatus/config.yaml}
+    - {src: ntfy-server.yml.j2, dest: ntfy/server.yml}
+    - {src: grafana-datasources.yml.j2, dest: grafana/provisioning/datasources/vm.yml}
+    - {src: grafana-dashboards.yml.j2, dest: grafana/provisioning/dashboards/common.yml}
+  loop_control: {label: "{{ item.dest }}"}
+  notify: Restart hub
+
+# Common rules, re-scoped per site with extra_label=site=<name>:
+#   - "hub" itself (the VPS host + hub components), keeps the Watchdog
+#   - relay sites without their own vmalert (evaluate_rules: true, i.e. private)
+# Sites with their own vmalert (numerics, sqs) are NOT evaluated here → no duplicate alerts.
+- name: Common rules, re-scoped per site
+  ansible.builtin.copy:
+    dest: "{{ hub_dir }}/rules/{{ item.0 }}-{{ item.1 | basename }}"
+    content: "{{ item.1 | site_rules(item.0, keep_watchdog=(item.0 == 'hub')) }}"
+    mode: "0644"
+  loop: >-
+    {{ (['hub'] + (hub_sites | selectattr('evaluate_rules', 'defined') | selectattr('evaluate_rules') | map(attribute='name') | list))
+       | product(query('ansible.builtin.fileglob', role_path ~ '/../../../rules/*.yml')) | list }}
+  loop_control: {label: "{{ item.0 }}/{{ item.1 | basename }}"}
+  notify: Restart hub
+
+- name: Dashboards
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../../dashboards/"
+    dest: "{{ hub_dir }}/grafana/dashboards/"
+    mode: "0644"
+
+- name: Grafana admin password
+  ansible.builtin.copy:
+    dest: "{{ hub_dir }}/grafana/admin-password"
+    content: "{{ hub_grafana_admin_password }}"
+    mode: "0644"
+
+- name: Compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ hub_dir }}/compose.yml"
+    mode: "0644"
+
+- name: Start / update hub
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans --pull missing
+    chdir: "{{ hub_dir }}"
+  register: _up
+  changed_when: "'Started' in _up.stderr or 'Recreated' in _up.stderr or 'Created' in _up.stderr"

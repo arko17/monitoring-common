@@ -1,0 +1,66 @@
+- name: Validate configuration
+  ansible.builtin.assert:
+    that:
+      - beszel_hub_url | length > 0
+      - beszel_hub_public_key | length > 0
+      - beszel_universal_token | length > 0
+    fail_msg: "Set beszel_hub_url, beszel_hub_public_key and beszel_universal_token (vault) for this site."
+
+- name: Create system user
+  ansible.builtin.user:
+    name: beszel
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/beszel-agent
+
+- name: Check installed version
+  ansible.builtin.command: /usr/local/bin/beszel-agent --version
+  register: _ba_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download beszel-agent {{ beszel_agent_version }}
+  when: beszel_agent_version not in (_ba_installed.stdout | default(''))
+  ansible.builtin.unarchive:
+    src: "https://github.com/henrygd/beszel/releases/download/v{{ beszel_agent_version }}/beszel-agent_linux_{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    include: [beszel-agent]
+  notify: Restart beszel-agent
+
+- name: Environment file
+  ansible.builtin.template:
+    src: beszel-agent.env.j2
+    dest: /etc/beszel-agent.env
+    mode: "0600"
+  notify: Restart beszel-agent
+
+- name: Systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/beszel-agent.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Beszel agent
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      User=beszel
+      EnvironmentFile=/etc/beszel-agent.env
+      StateDirectory=beszel-agent
+      Environment=DATA_DIR=/var/lib/beszel-agent
+      ExecStart=/usr/local/bin/beszel-agent
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart beszel-agent
+
+- name: Enable beszel-agent
+  ansible.builtin.systemd_service:
+    name: beszel-agent
+    enabled: true
+    state: started
+    daemon_reload: true

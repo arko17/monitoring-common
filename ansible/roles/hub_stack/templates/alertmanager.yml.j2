@@ -1,0 +1,38 @@
+# Managed by Ansible.
+route:
+  receiver: ntfy-hub
+  group_by: [alertname, site, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    - matchers: ['alertname="Watchdog"']
+      receiver: {{ 'healthchecks' if hub_healthchecks_watchdog_url else 'null' }}
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
+    - matchers: ['severity="info"']
+      receiver: "null"
+{% for s in hub_sites if s.evaluate_rules | default(false) %}
+    - matchers: ['site="{{ s.name }}"']
+      receiver: ntfy-{{ s.name }}
+{% endfor %}
+
+receivers:
+  - name: "null"
+{% if hub_healthchecks_watchdog_url %}
+  - name: healthchecks
+    webhook_configs:
+      - url: "{{ hub_healthchecks_watchdog_url }}"
+        send_resolved: false
+{% endif %}
+  - name: ntfy-hub
+    webhook_configs:
+      - url: "http://ntfy/alerts-hub?template=alertmanager"
+        http_config: {authorization: {type: Bearer, credentials: "{{ hub_ntfy_hub_token }}"}}
+{% for s in hub_sites if s.evaluate_rules | default(false) %}
+  - name: ntfy-{{ s.name }}
+    webhook_configs:
+      - url: "http://ntfy/alerts-{{ s.name }}?template=alertmanager"
+        http_config: {authorization: {type: Bearer, credentials: "{{ hub_ntfy_hub_token }}"}}
+{% endfor %}

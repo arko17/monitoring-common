@@ -1,0 +1,58 @@
+# Managed by Ansible.
+route:
+  receiver: {{ 'matrix' if stack_matrix_receiver else ('ntfy' if ntfy_alerts.url else 'null') }}
+  group_by: [alertname, site, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    # Dead man's switch → healthchecks.io (alerts there if pings stop)
+    - matchers: ['alertname="Watchdog"']
+      receiver: {{ 'healthchecks' if healthchecks_watchdog_url else 'null' }}
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
+    # Informational: visible in Grafana/Alertmanager UI only, never notifies.
+    - matchers: ['severity="info"']
+      receiver: "null"
+{% if stack_matrix_receiver and ntfy_alerts.url %}
+    # Group channel first, then continue to Simon's personal ntfy (remove on handover).
+    - matchers: ['severity=~"warning|critical"']
+      receiver: matrix
+      continue: true
+    - matchers: ['severity=~"warning|critical"']
+      receiver: ntfy
+{% endif %}
+
+inhibit_rules:
+  # A host that is down should not also report everything else about itself.
+  - source_matchers: ['alertname="HostDown"']
+    target_matchers: ['severity=~"warning|info"']
+    equal: [site, instance]
+
+receivers:
+  - name: "null"
+{% if healthchecks_watchdog_url %}
+  - name: healthchecks
+    webhook_configs:
+      - url: "{{ healthchecks_watchdog_url }}"
+        send_resolved: false
+{% endif %}
+{% if stack_matrix_receiver %}
+  - name: matrix
+    webhook_configs:
+      - url: "http://matrix-receiver:12345/alerts/{{ site_name }}"
+        http_config:
+          basic_auth:
+            username: alertmanager
+            password: "{{ matrix_receiver_password }}"
+{% endif %}
+{% if ntfy_alerts.url %}
+  - name: ntfy
+    webhook_configs:
+      - url: "{{ ntfy_alerts.url }}/{{ ntfy_alerts.topic }}?template=alertmanager"
+        http_config:
+          authorization:
+            type: Bearer
+            credentials: "{{ ntfy_alerts.token }}"
+{% endif %}

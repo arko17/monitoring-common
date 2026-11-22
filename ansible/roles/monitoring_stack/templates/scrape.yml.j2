@@ -1,0 +1,88 @@
+# Managed by Ansible. Targets come from the site inventory (file_sd/*.json).
+global:
+  scrape_interval: {{ scrape_interval }}
+  scrape_timeout: 20s
+
+scrape_configs:
+  # --- monitoring stack itself ---------------------------------------------
+  - job_name: vmagent
+    static_configs: [{targets: ["localhost:8429"]}]
+{% if stack_tsdb %}
+  - job_name: victoriametrics
+    static_configs: [{targets: ["victoriametrics:8428"]}]
+  - job_name: vmalert
+    static_configs: [{targets: ["vmalert:8880"]}]
+  - job_name: alertmanager
+    static_configs: [{targets: ["alertmanager:9093"]}]
+{% endif %}
+{% if stack_grafana %}
+  - job_name: grafana
+    static_configs: [{targets: ["grafana:3000"]}]
+{% endif %}
+{% if stack_matrix_receiver %}
+  - job_name: matrix-receiver
+    static_configs: [{targets: ["matrix-receiver:12345"]}]
+{% endif %}
+
+  # --- servers ---------------------------------------------------------------
+  - job_name: node
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/node.json]}]
+  - job_name: smartctl
+    scrape_interval: 5m
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/smartctl.json]}]
+  - job_name: ipmi
+    scrape_interval: 1m
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/ipmi.json]}]
+
+{% if stack_pve_exporter %}
+  - job_name: pve
+    metrics_path: /pve
+    params: {module: [default], cluster: ["1"], node: ["1"]}
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/pve.json]}]
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {target_label: __address__, replacement: "pve:9221"}
+{% endif %}
+{% if stack_pbs_exporter %}
+  - job_name: pbs
+    scrape_interval: 5m
+    scrape_timeout: 60s
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/pbs.json]}]
+    relabel_configs:
+      - {source_labels: [__address__], regex: "(.*)", replacement: "https://$1:8007", target_label: __param_target}
+      - {target_label: __address__, replacement: "pbs:10019"}
+{% endif %}
+{% if stack_snmp %}
+  - job_name: synology
+    scrape_interval: 2m
+    metrics_path: /snmp
+    params: {module: [if_mib, synology], auth: [synology_v2]}
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/synology.json]}]
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {target_label: __address__, replacement: "snmp:9116"}
+{% endif %}
+
+{% if stack_blackbox %}
+  # --- probes ----------------------------------------------------------------
+  - job_name: blackbox-services
+    metrics_path: /probe
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/services.json]}]
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {source_labels: [module], target_label: __param_module}
+      - {target_label: __address__, replacement: "blackbox:9115"}
+  - job_name: blackbox-workstations
+    scrape_interval: 2m
+    metrics_path: /probe
+    params: {module: [icmp]}
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/workstations.json]}]
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {target_label: __address__, replacement: "blackbox:9115"}
+{% endif %}
+
+{% if extra_scrape_configs %}
+  # --- site specific ----------------------------------------------------------
+  {{ extra_scrape_configs | to_nice_yaml(indent=2) | indent(2) }}
+{% endif %}

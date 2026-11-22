@@ -1,0 +1,10 @@
+# Managed by Ansible.
+apiVersion: 1
+datasources:
+  - name: VictoriaMetrics
+    uid: vm
+    type: prometheus
+    access: proxy
+    url: http://victoriametrics:8428
+    isDefault: true
+    jsonData: {timeInterval: "{{ scrape_interval }}"}

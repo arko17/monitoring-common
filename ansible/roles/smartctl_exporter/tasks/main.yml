@@ -1,0 +1,44 @@
+# Skipped automatically on VMs/LXCs (no physical disks).
+- name: Install smartctl_exporter on physical hosts
+  when: ansible_virtualization_role | default('host') != 'guest'
+  block:
+    - name: Install smartmontools
+      ansible.builtin.package:
+        name: smartmontools
+        state: present
+    - name: Check installed version
+      ansible.builtin.command: /usr/local/bin/smartctl_exporter --version
+      register: _se_installed
+      changed_when: false
+      failed_when: false
+    - name: Download release
+      when: smartctl_exporter_version not in (_se_installed.stdout | default('') + _se_installed.stderr | default(''))
+      ansible.builtin.unarchive:
+        src: "https://github.com/prometheus-community/smartctl_exporter/releases/download/v{{ smartctl_exporter_version }}/smartctl_exporter-{{ smartctl_exporter_version }}.linux-{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}.tar.gz"
+        dest: /usr/local/bin
+        remote_src: true
+        extra_opts: [--strip-components=1, --wildcards, "*/smartctl_exporter"]
+      notify: Restart smartctl_exporter
+    - name: Systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/smartctl_exporter.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Prometheus smartctl_exporter
+          After=network-online.target
+
+          [Service]
+          # needs root for raw disk access
+          ExecStart=/usr/local/bin/smartctl_exporter --web.listen-address={{ smartctl_exporter_listen }} --smartctl.interval=5m
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart smartctl_exporter
+    - name: Enable smartctl_exporter
+      ansible.builtin.systemd_service:
+        name: smartctl_exporter
+        enabled: true
+        state: started
+        daemon_reload: true

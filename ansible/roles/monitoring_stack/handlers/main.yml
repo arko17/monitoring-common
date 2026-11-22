@@ -1,0 +1,21 @@
+# vmagent/vmalert/alertmanager reload configs on SIGHUP without losing state.
+- name: Reload vmagent
+  ansible.builtin.command: docker compose kill -s HUP vmagent
+  args: {chdir: "{{ stack_dir }}"}
+  failed_when: false
+
+- name: Reload vmalert
+  ansible.builtin.command: docker compose kill -s HUP vmalert
+  args: {chdir: "{{ stack_dir }}"}
+  when: stack_tsdb
+  failed_when: false
+
+- name: Reload alertmanager
+  ansible.builtin.command: docker compose kill -s HUP alertmanager
+  args: {chdir: "{{ stack_dir }}"}
+  when: stack_tsdb
+  failed_when: false
+
+- name: Restart stack
+  ansible.builtin.command: docker compose up -d --force-recreate --remove-orphans
+  args: {chdir: "{{ stack_dir }}"}

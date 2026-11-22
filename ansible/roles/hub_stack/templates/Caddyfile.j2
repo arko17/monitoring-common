@@ -1,0 +1,46 @@
+# Managed by Ansible.
+{% if hub_acme_email %}
+{
+	email {{ hub_acme_email }}
+}
+{% endif %}
+
+{{ hub_hosts.grafana }} {
+	reverse_proxy grafana:3000
+}
+
+# remote_write endpoint for the sites (one basic-auth user per site)
+{{ hub_hosts.metrics }} {
+	@write path /api/v1/write
+	handle @write {
+		basic_auth {
+{% for s in hub_sites %}
+			{{ s.name }} {{ s.password | password_hash('bcrypt', salt=(('rw' ~ s.name ~ s.password) | hash('sha1'))[:21] ~ 'e', ident='2a') }}
+{% endfor %}
+		}
+		request_body {
+			max_size 64MB
+		}
+		reverse_proxy victoriametrics:8428
+	}
+	handle {
+		respond 404
+	}
+}
+
+{{ hub_hosts.ntfy }} {
+	reverse_proxy ntfy:80
+}
+
+{{ hub_hosts.status }} {
+{% if hub_status_basic_auth %}
+	basic_auth {
+		{{ hub_ntfy_admin_user }} {{ hub_ntfy_admin_password | password_hash('bcrypt', salt=(('st' ~ hub_ntfy_admin_password) | hash('sha1'))[:21] ~ 'e', ident='2a') }}
+	}
+{% endif %}
+	reverse_proxy gatus:8080
+}
+
+{{ hub_hosts.beszel }} {
+	reverse_proxy beszel:8090
+}

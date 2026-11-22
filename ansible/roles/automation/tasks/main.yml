@@ -1,0 +1,79 @@
+- name: Install git and ansible
+  ansible.builtin.apt:
+    name: [git, ansible-core, python3-passlib]
+    state: present
+
+- name: Config directory
+  ansible.builtin.file:
+    path: /etc/monitoring
+    state: directory
+    mode: "0700"
+
+- name: Check vault password file
+  ansible.builtin.stat:
+    path: "{{ automation_vault_password_file }}"
+  register: _vaultpass
+
+- name: Warn if vault password is missing
+  ansible.builtin.debug:
+    msg: "Place the vault password in {{ automation_vault_password_file }} (mode 0600), otherwise the timers fail."
+  when: not _vaultpass.stat.exists
+
+- name: Generate SSH key for rollouts
+  ansible.builtin.command:
+    cmd: ssh-keygen -q -t ed25519 -N "" -C "monitoring-automation@{{ inventory_hostname }}" -f {{ automation_ssh_key }}
+    creates: "{{ automation_ssh_key }}"
+
+- name: Read public key
+  ansible.builtin.slurp:
+    src: "{{ automation_ssh_key }}.pub"
+  register: _sshkey
+
+- name: Show public key (add it as deploy key and to authorized_keys on all servers, see README)
+  ansible.builtin.debug:
+    msg: "{{ _sshkey.content | b64decode | trim }}"
+
+- name: Clone site repository
+  ansible.builtin.git:
+    repo: "{{ automation_repo_url }}"
+    dest: "{{ automation_repo_dir }}"
+    version: main
+    recursive: true
+    accept_newhostkey: true
+    key_file: "{{ automation_ssh_key }}"
+    update: false
+  when: automation_repo_url | length > 0
+  register: _clone
+  failed_when: false   # first run: deploy key not yet added → warn instead of failing
+
+- name: Repository not cloned yet
+  ansible.builtin.debug:
+    msg: >-
+      Could not clone {{ automation_repo_url }}: add the public key above as read-only
+      deploy key of this repo and re-run. ({{ _clone.msg | default('') }})
+  when: not (_clone.skipped | default(false)) and _clone.after is not defined
+
+- name: Runner script
+  ansible.builtin.template:
+    src: monitoring-run.sh.j2
+    dest: /usr/local/bin/monitoring-run
+    mode: "0755"
+
+- name: Systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - monitoring-nightly.service
+    - monitoring-nightly.timer
+    - monitoring-weekly.service
+    - monitoring-weekly.timer
+
+- name: Enable timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: [monitoring-nightly.timer, monitoring-weekly.timer]

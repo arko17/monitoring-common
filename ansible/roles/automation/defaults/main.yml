@@ -1,0 +1,10 @@
+# Self-updating loop on the stack host: pull the site repo, apply it.
+automation_repo_url: ""            # git@git.example:AG-Lesanovsky/site-sqs.git (deploy key, read-only)
+automation_repo_dir: /opt/monitoring-repo
+automation_vault_password_file: /etc/monitoring/vault-pass   # placed manually once
+automation_ssh_key: /root/.ssh/monitoring_ed25519            # used for the weekly exporter rollout
+automation_nightly_time: "*-*-* 03:30:00"
+automation_weekly_time: "Mon *-*-* 04:30:00"
+# healthchecks.io ping URLs (one check per job, period 1d / 7d)
+automation_hc_nightly_url: ""
+automation_hc_weekly_url: ""

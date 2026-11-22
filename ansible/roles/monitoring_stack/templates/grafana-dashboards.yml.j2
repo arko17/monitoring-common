@@ -1,0 +1,8 @@
+# Managed by Ansible.
+apiVersion: 1
+providers:
+  - name: common
+    folder: "{{ site_name }}"
+    type: file
+    allowUiUpdates: false
+    options: {path: /var/lib/grafana/dashboards}

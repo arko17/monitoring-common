@@ -1,0 +1,11 @@
+# renovate: datasource=github-releases depName=prometheus/node_exporter
+node_exporter_version: "1.13.1"
+# Bind address. Use the WireGuard IP on hosts that are reachable from the internet (e.g. hhop).
+node_exporter_listen: "0.0.0.0:9100"
+node_exporter_textfile_dir: /var/lib/node_exporter/textfile
+node_exporter_extra_flags:
+  - --collector.systemd
+  - --collector.processes
+  - "--collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+|var/lib/containers/.+)($|/)"
+# Write apt_upgrades_pending / node_reboot_required (Debian/Ubuntu/PVE only)
+node_exporter_apt_metrics: "{{ ansible_os_family == 'Debian' }}"

@@ -1,0 +1,27 @@
+groups:
+  - name: probes
+    interval: 1m
+    rules:
+      - alert: ServiceDown
+        expr: probe_success{job="blackbox-services"} == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.site }}: {{ $labels.instance }} is not responding"
+
+      - alert: CertificateExpiresSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 14 * 86400
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: certificate of {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+
+  # Workstations: never page. The rule exists for dashboards and the weekly digest.
+  - name: workstations
+    interval: 30m
+    rules:
+      - alert: WorkstationNotSeen
+        expr: max_over_time(probe_success{job="blackbox-workstations"}[14d]) == 0
+        labels: {severity: info}
+        annotations:
+          summary: "{{ $labels.site }}: workstation {{ $labels.instance }} not seen for 14 days"

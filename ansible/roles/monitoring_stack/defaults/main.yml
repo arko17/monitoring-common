@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# Site monitoring stack. Rendered to {{ stack_dir }} and run with docker compose.
+# Everything a site needs to change lives in its group_vars; secrets in vault.
+# ---------------------------------------------------------------------------
+site_name: ""                 # numerics | sqs | private  → label site=<name> on every series
+stack_dir: /opt/monitoring
+
+# Components. A "relay" site (private) only runs vmagent + exporters and lets
+# the hub store data and evaluate rules.
+stack_tsdb: true              # VictoriaMetrics + vmalert + Alertmanager
+stack_grafana: true
+stack_beszel_hub: true
+stack_matrix_receiver: false
+stack_blackbox: true
+stack_snmp: false
+stack_pve_exporter: false
+stack_pbs_exporter: false
+
+# Pinned images. Renovate (docker datasource) bumps these via the regex manager.
+stack_images:
+  victoriametrics: victoriametrics/victoria-metrics:v1.156.0
+  vmagent: victoriametrics/vmagent:v1.156.0
+  vmalert: victoriametrics/vmalert:v1.156.0
+  alertmanager: prom/alertmanager:v0.35.0
+  grafana: grafana/grafana:13.3.1
+  beszel: henrygd/beszel:0.21.2
+  blackbox: prom/blackbox-exporter:v0.29.1
+  snmp: prom/snmp-exporter:v0.31.0
+  pve: prompve/prometheus-pve-exporter:3.12.0
+  pbs: ghcr.io/natrontech/pbs-exporter:v0.10.0
+  matrix_receiver: metio/matrix-alertmanager-receiver:2026.9.23
+
+vm_retention: 90d
+scrape_interval: 30s
+
+# Resource limits (qusp shares the host with Synapse).
+stack_limits:
+  victoriametrics: {mem: 1g, cpus: "1.0"}
+  vmagent: {mem: 256m, cpus: "0.5"}
+  grafana: {mem: 512m, cpus: "0.5"}
+  default: {mem: 128m, cpus: "0.25"}
+
+# Ports published on the stack host.
+stack_bind: "0.0.0.0"
+grafana_port: 3000
+beszel_port: 8090
+
+# --- Hub uplink (remove this block / set url to "" on handover) ------------
+hub_remote_write:
+  url: ""                     # https://metrics.<hub_domain>/api/v1/write
+  username: "{{ site_name }}"
+  password: ""                # vault
+
+# --- Alert receivers --------------------------------------------------------
+ntfy_alerts:                  # Simon's personal channel. Remove on handover.
+  url: ""                     # https://ntfy.<hub_domain>
+  topic: "alerts-{{ site_name }}"
+  token: ""                   # vault, tk_...
+matrix_alerts:                # group-owned channel
+  homeserver_url: ""
+  user_id: ""                 # "@monitoring:qusp.example"
+  access_token: ""            # vault
+  room_id: ""                 # "!abc:qusp.example"
+healthchecks_watchdog_url: "" # https://hc-ping.com/<uuid>, pinged by the always-firing Watchdog alert
+
+# --- Grafana ----------------------------------------------------------------
+grafana_admin_password: ""    # vault
+grafana_root_url: "http://{{ ansible_host | default(inventory_hostname) }}:{{ grafana_port }}"
+
+# --- Exporter credentials ---------------------------------------------------
+pve_api:                      # PVE user "monitoring@pve" with role PVEAuditor + API token
+  user: monitoring@pve
+  token_name: exporter
+  token_value: ""             # vault
+  verify_ssl: false
+pbs_api:                      # PBS user "monitoring@pbs" with role DatastoreAudit + API token
+  username: monitoring@pbs
+  token_name: exporter
+  token_value: ""             # vault
+synology_snmp_community: ""   # vault; SNMP v2c read-only on the NAS
+
+# --- What to scrape (besides the inventory groups) -------------------------
+# Inventory groups that drive scraping automatically:
+#   servers       → node_exporter :9100 (+ smartctl :9633 on physical hosts)
+#   bare_metal    → ipmi_exporter :9290
+#   pve_hosts     → prometheus-pve-exporter (API)
+#   pbs_hosts     → pbs-exporter (API)
+#   synology      → snmp_exporter (synology module)
+#   workstations  → ICMP ping via blackbox (details live in Beszel)
+service_probes: []            # [{name: matrix, url: https://matrix.example/_matrix/client/versions}]
+extra_scrape_configs: []      # raw vmagent scrape_configs entries
+vmagent_extra_networks: []    # existing docker networks vmagent joins (e.g. to scrape other compose projects)
+site_rules_dir: "{{ playbook_dir }}/rules"   # optional site-specific rules
+
+# Internal secret between Alertmanager and the Matrix receiver (both on the
+# compose network). Derived, so it is stable across runs.
+matrix_receiver_password: "{{ (site_name ~ matrix_alerts.access_token) | hash('sha256') }}"

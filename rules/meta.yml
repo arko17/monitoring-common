@@ -1,0 +1,32 @@
+# Monitoring the monitoring: is the pipeline itself healthy?
+groups:
+  - name: meta
+    interval: 1m
+    rules:
+      # Always firing. Alertmanager sends it to healthchecks.io as a dead man's switch.
+      - alert: Watchdog
+        expr: vector(1)
+        labels: {severity: none}
+        annotations:
+          summary: "Alerting pipeline heartbeat"
+
+      - alert: VmagentRemoteWriteFailing
+        expr: sum by (site, url) (rate(vmagent_remotewrite_retries_count_total[10m])) > 0
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: vmagent cannot deliver to {{ $labels.url }} for 30 minutes (buffering on disk)"
+
+      - alert: MonitoringComponentDown
+        expr: up{job=~"victoriametrics|vmagent|vmalert|alertmanager|grafana|blackbox|matrix-receiver"} == 0
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: monitoring component {{ $labels.job }} is down"
+
+      - alert: AutomationJobStale
+        # Written by the monitoring-update / monitoring-ansible timers through the textfile collector.
+        expr: time() - monitoring_job_last_success_timestamp_seconds > 8 * 86400
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: job {{ $labels.job_name }} has not succeeded for 8 days"

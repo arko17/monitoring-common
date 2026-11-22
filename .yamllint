@@ -1,0 +1,9 @@
+extends: default
+rules:
+  line-length: {max: 200}
+  document-start: disable
+  truthy: {allowed-values: ["true", "false"]}
+  comments: {min-spaces-from-content: 1}
+  braces: {max-spaces-inside: 1}
+ignore: |
+  *.j2

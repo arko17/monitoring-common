@@ -1,0 +1,36 @@
+- name: Install wg metrics script
+  ansible.builtin.copy:
+    src: wg-metrics.sh
+    dest: /usr/local/bin/wg-metrics.sh
+    mode: "0755"
+
+- name: Install wg metrics units
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: wg-metrics.service
+      content: |
+        [Unit]
+        Description=Write WireGuard metrics for node_exporter
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/wg-metrics.sh {{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile') }}/wireguard.prom
+    - name: wg-metrics.timer
+      content: |
+        [Unit]
+        Description=Refresh WireGuard metrics every minute
+        [Timer]
+        OnBootSec=1min
+        OnUnitActiveSec=1min
+        [Install]
+        WantedBy=timers.target
+  loop_control: {label: "{{ item.name }}"}
+
+- name: Enable wg metrics timer
+  ansible.builtin.systemd_service:
+    name: wg-metrics.timer
+    enabled: true
+    state: started
+    daemon_reload: true

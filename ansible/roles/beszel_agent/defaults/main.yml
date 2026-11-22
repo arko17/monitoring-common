@@ -1,0 +1,7 @@
+# renovate: datasource=github-releases depName=henrygd/beszel
+beszel_agent_version: "0.21.2"
+# Hub that this agent reports to (WebSocket, outbound from the agent).
+beszel_hub_url: ""          # e.g. https://beszel.numerics.example or http://monitor.lan:8090
+beszel_hub_public_key: ""   # "ssh-ed25519 AAAA..." from the hub's "Add system" dialog
+beszel_universal_token: ""  # hub → Settings → Tokens & Fingerprints → universal token (vault!)
+beszel_agent_extra_env: {}  # e.g. {EXTRA_FILESYSTEMS: "/data"}

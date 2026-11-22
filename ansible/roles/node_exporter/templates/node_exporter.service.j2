@@ -1,0 +1,21 @@
+[Unit]
+Description=Prometheus node_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=node_exporter
+ExecStart=/usr/local/bin/node_exporter \
+  --web.listen-address={{ node_exporter_listen }} \
+  --collector.textfile.directory={{ node_exporter_textfile_dir }} \
+{% for f in node_exporter_extra_flags %}
+  '{{ f }}'{{ ' \\' if not loop.last }}
+{% endfor %}
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

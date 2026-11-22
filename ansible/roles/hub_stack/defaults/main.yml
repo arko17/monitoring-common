@@ -1,0 +1,66 @@
+# ---------------------------------------------------------------------------
+# Personal hub on the VPS: receives remote_write from all sites, one Grafana,
+# external checks (Gatus), ntfy push server, Beszel hub for private devices.
+# ---------------------------------------------------------------------------
+hub_dir: /opt/hub
+hub_domain: ""                  # e.g. mon.example.org → grafana.mon.example.org, ...
+hub_acme_email: ""              # optional Let's Encrypt account mail (expiry notices); empty = none
+# Directory on a separate volume for the TSDB (and vmagent buffer). Empty = docker named volumes.
+# Docker is made to wait for this mount, so a missing volume never fills the root disk.
+hub_data_dir: ""
+hub_hosts:
+  grafana: "grafana.{{ hub_domain }}"
+  metrics: "metrics.{{ hub_domain }}"
+  ntfy: "ntfy.{{ hub_domain }}"
+  status: "status.{{ hub_domain }}"
+  beszel: "beszel.{{ hub_domain }}"
+
+hub_images:
+  caddy: caddy:2.11.9
+  victoriametrics: victoriametrics/victoria-metrics:v1.156.0
+  vmagent: victoriametrics/vmagent:v1.156.0
+  vmalert: victoriametrics/vmalert:v1.156.0
+  alertmanager: prom/alertmanager:v0.35.0
+  grafana: grafana/grafana:13.3.1
+  gatus: twinproduction/gatus:v5.38.0
+  ntfy: binwiederhier/ntfy:v2.38.1
+  beszel: henrygd/beszel:0.21.2
+
+hub_retention: 180d
+
+# Sites allowed to remote_write. password: vault. One entry per site.
+#   evaluate_rules: true → hub evaluates the common rules for this site
+#   (for relay sites without their own vmalert, i.e. "private").
+hub_sites: []
+#  - {name: numerics, password: "{{ vault_hub_rw_numerics }}", evaluate_rules: false}
+#  - {name: sqs,      password: "{{ vault_hub_rw_sqs }}",      evaluate_rules: false}
+#  - {name: private,  password: "{{ vault_hub_rw_private }}",  evaluate_rules: true}
+
+# Alert after this long without data from a site.
+hub_site_silence: 15m
+
+hub_grafana_admin_password: ""      # vault
+hub_healthchecks_watchdog_url: ""   # hc-ping URL; the hub's own Watchdog alert pings it
+
+# --- ntfy --------------------------------------------------------------------
+# Users are provisioned declaratively (server.yml). Simon subscribes with the
+# admin account in the ntfy app; every publisher gets a write-only token.
+hub_ntfy_admin_user: simon
+hub_ntfy_admin_password: ""          # vault
+hub_ntfy_upstream: https://ntfy.sh   # relays a poll request for instant iOS push; message content stays here
+# Write-only publishers. token: vault, "tk_" + 29 chars (ntfy token generate).
+hub_ntfy_publishers: []
+#  - {name: site-numerics, topic: alerts-numerics, token: "{{ vault_ntfy_token_numerics }}"}
+#  - {name: site-sqs,      topic: alerts-sqs,      token: "{{ vault_ntfy_token_sqs }}"}
+#  - {name: hub,           topic: "alerts-*",      token: "{{ vault_ntfy_token_hub }}"}
+
+# --- Gatus external checks (from the internet, independent of all sites) -----
+hub_status_basic_auth: true          # protect the status page with the ntfy admin credentials
+hub_gatus_endpoints: []
+#  - name: matrix
+#    group: sqs
+#    url: https://matrix.example/_matrix/client/versions
+#    conditions: ["[STATUS] == 200", "[CERTIFICATE_EXPIRATION] > 336h"]
+
+# Token the hub itself (Alertmanager, Gatus) publishes with: the publisher named "hub".
+hub_ntfy_hub_token: "{{ (hub_ntfy_publishers | selectattr('name', 'equalto', 'hub') | first).token }}"

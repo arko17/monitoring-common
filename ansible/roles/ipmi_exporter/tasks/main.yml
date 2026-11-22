@@ -1,0 +1,44 @@
+# Local mode: reads the BMC of the host it runs on (bare-metal servers only).
+- name: Install FreeIPMI
+  ansible.builtin.package:
+    name: freeipmi-tools
+    state: present
+
+- name: Check installed version
+  ansible.builtin.command: /usr/local/bin/ipmi_exporter --version
+  register: _ie_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download release
+  when: ipmi_exporter_version not in (_ie_installed.stdout | default('') + _ie_installed.stderr | default(''))
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus-community/ipmi_exporter/releases/download/v{{ ipmi_exporter_version }}/ipmi_exporter-{{ ipmi_exporter_version }}.linux-amd64.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    extra_opts: [--strip-components=1, --wildcards, "*/ipmi_exporter"]
+  notify: Restart ipmi_exporter
+
+- name: Systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ipmi_exporter.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Prometheus ipmi_exporter (local BMC)
+      After=network-online.target
+
+      [Service]
+      ExecStart=/usr/local/bin/ipmi_exporter --web.listen-address={{ ipmi_exporter_listen }}
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart ipmi_exporter
+
+- name: Enable ipmi_exporter
+  ansible.builtin.systemd_service:
+    name: ipmi_exporter
+    enabled: true
+    state: started
+    daemon_reload: true

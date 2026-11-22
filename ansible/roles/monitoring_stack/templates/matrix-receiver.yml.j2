@@ -1,0 +1,21 @@
+# Managed by Ansible.
+http:
+  port: 12345
+  alerts-path-prefix: /alerts
+  metrics-enabled: true
+  basic-username: alertmanager
+  basic-password: "{{ matrix_receiver_password }}"
+matrix:
+  homeserver-url: "{{ matrix_alerts.homeserver_url }}"
+  user-id: "{{ matrix_alerts.user_id }}"
+  access-token: "{{ matrix_alerts.access_token }}"
+  room-mapping:
+    {{ site_name }}: "{{ matrix_alerts.room_id }}"
+templating:
+  firing-template: '
+    {{ '{{' }} $icon := "🟡" {{ '}}' }}
+    {{ '{{' }} if eq .Alert.Labels.severity "critical" {{ '}}' }}{{ '{{' }} $icon = "🔴" {{ '}}' }}{{ '{{' }} end {{ '}}' }}
+    {{ '{{' }} if eq .Alert.Status "resolved" {{ '}}' }}{{ '{{' }} $icon = "✅" {{ '}}' }}{{ '{{' }} end {{ '}}' }}
+    <p>{{ '{{' }} $icon {{ '}}' }} <strong>{{ '{{' }} .Alert.Labels.alertname {{ '}}' }}</strong>
+    ({{ '{{' }} .Alert.Labels.severity {{ '}}' }}): {{ '{{' }} .Alert.Annotations.summary {{ '}}' }}
+    — <a href="{{ '{{' }} .SilenceURL {{ '}}' }}">silence</a></p>'

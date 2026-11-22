@@ -1,0 +1,27 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 6am on monday"],
+  "packageRules": [
+    {"matchUpdateTypes": ["patch", "minor"], "automerge": true},
+    {"matchPackageNames": ["/victoriametrics/"], "groupName": "VictoriaMetrics"},
+    {"matchUpdateTypes": ["major"], "dependencyDashboardApproval": true}
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Container images pinned in role defaults (key: repo/image:tag)",
+      "managerFilePatterns": ["/ansible/roles/.+/defaults/main\\.yml$/"],
+      "matchStrings": ["\\s+\\w+: (?<depName>[a-z0-9.\\-/]+):(?<currentValue>v?[0-9][\\w.\\-]*)\\s"],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Binary versions with a '# renovate:' hint",
+      "managerFilePatterns": ["/ansible/roles/.+/defaults/main\\.yml$/"],
+      "matchStrings": ["# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\w+: \"?(?<currentValue>[^\"\\n]+)\"?"],
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    }
+  ]
+}

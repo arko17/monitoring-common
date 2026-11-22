@@ -1,0 +1,38 @@
+# Shared site playbook. Each site repo's site.yml imports this file.
+#   full run   : ansible-playbook -i inventory.yml site.yml
+#   stack only : ansible-playbook -i inventory.yml site.yml --tags stack
+- name: Exporters on servers
+  hosts: servers
+  become: true
+  tags: [exporters]
+  roles:
+    - node_exporter
+    - smartctl_exporter
+
+- name: IPMI exporter on bare-metal servers
+  hosts: bare_metal
+  become: true
+  tags: [exporters]
+  roles: [ipmi_exporter]
+
+- name: WireGuard metrics on WG endpoints
+  hosts: wireguard_hosts
+  become: true
+  tags: [exporters]
+  roles: [wireguard_metrics]
+
+- name: Beszel agent on Linux workstations
+  hosts: workstations:&linux
+  become: true
+  tags: [agents]
+  ignore_unreachable: true   # workstations are often switched off; don't fail the weekly run
+  roles: [beszel_agent]
+
+- name: Monitoring stack
+  hosts: stack_host
+  become: true
+  tags: [stack]
+  roles:
+    - docker
+    - monitoring_stack
+    - automation

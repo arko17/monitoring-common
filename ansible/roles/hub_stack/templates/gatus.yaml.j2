@@ -1,0 +1,30 @@
+# Managed by Ansible. External checks, run from the internet (hub VPS).
+storage:
+  type: sqlite
+  path: /data/data.db
+metrics: true
+ui:
+  title: Status
+alerting:
+  ntfy:
+    url: http://ntfy
+    topic: alerts-hub
+    token: "{{ hub_ntfy_hub_token }}"
+    priority: 4
+    default-alert:
+      failure-threshold: 3
+      success-threshold: 2
+      send-on-resolved: true
+endpoints:
+{% for e in hub_gatus_endpoints %}
+  - name: {{ e.name | to_json }}
+    group: {{ e.group | default('external') | to_json }}
+    url: {{ e.url | to_json }}
+    interval: {{ e.interval | default('2m') }}
+{% if e.dns is defined %}
+    dns: {{ e.dns | to_json }}
+{% endif %}
+    conditions: {{ e.conditions | default(['[STATUS] == 200']) | to_json }}
+    alerts:
+      - type: ntfy
+{% endfor %}

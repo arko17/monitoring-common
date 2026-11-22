@@ -1,0 +1,191 @@
+- name: Validate site configuration
+  ansible.builtin.assert:
+    that:
+      - site_name | length > 0
+      - stack_tsdb or hub_remote_write.url | length > 0
+      - not stack_grafana or stack_tsdb
+      - not stack_grafana or grafana_admin_password | length > 0
+      - not stack_matrix_receiver or matrix_alerts.access_token | length > 0
+    fail_msg: "Incomplete site configuration, check group_vars and vault."
+
+- name: Stack base directory
+  ansible.builtin.file:
+    path: "{{ stack_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Stack directories
+  ansible.builtin.file:
+    path: "{{ stack_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"   # containers like alertmanager (nobody) and grafana (472) must traverse
+  loop:
+    - vmagent/file_sd
+    - rules
+    - alertmanager
+    - grafana/provisioning/datasources
+    - grafana/provisioning/dashboards
+    - grafana/provisioning/plugins
+    - grafana/provisioning/alerting
+    - grafana/dashboards
+    - blackbox
+    - snmp
+    - pve
+    - pbs
+    - matrix-receiver
+
+# ---------------------------------------------------------------------------
+# Targets from inventory. monitoring_address overrides the scrape address
+# (e.g. the WireGuard IP of hhop).
+# ---------------------------------------------------------------------------
+- name: Render file_sd target files
+  ansible.builtin.copy:
+    dest: "{{ stack_dir }}/vmagent/file_sd/{{ item.file }}"
+    mode: "0644"
+    content: "{{ item.targets | to_nice_json }}\n"
+  loop:
+    - file: node.json
+      targets: "{{ query('ansible.builtin.inventory_hostnames', 'servers') | map('monitoring_target', hostvars, 9100) | list }}"
+    - file: smartctl.json
+      targets: >-
+        {{ query('ansible.builtin.inventory_hostnames', 'servers')
+           | physical_hosts(hostvars, groups) | map('monitoring_target', hostvars, 9633) | list }}
+    - file: ipmi.json
+      targets: "{{ query('ansible.builtin.inventory_hostnames', 'bare_metal') | map('monitoring_target', hostvars, 9290) | list }}"
+    - file: pve.json
+      targets: "{{ query('ansible.builtin.inventory_hostnames', 'pve_hosts') | map('monitoring_target', hostvars) | list }}"
+    - file: pbs.json
+      targets: "{{ query('ansible.builtin.inventory_hostnames', 'pbs_hosts') | map('monitoring_target', hostvars) | list }}"
+    - file: synology.json
+      targets: "{{ query('ansible.builtin.inventory_hostnames', 'synology') | map('monitoring_target', hostvars) | list }}"
+    - file: workstations.json
+      targets: "{{ query('ansible.builtin.inventory_hostnames', 'workstations') | map('monitoring_target', hostvars) | list }}"
+    - file: services.json
+      targets: "{{ service_probes | map('probe_target') | list }}"
+  loop_control: {label: "{{ item.file }}"}
+
+- name: Render vmagent scrape config
+  ansible.builtin.template:
+    src: scrape.yml.j2
+    dest: "{{ stack_dir }}/vmagent/scrape.yml"
+    mode: "0644"
+  notify: Reload vmagent
+
+- name: Hub remote_write password
+  ansible.builtin.copy:
+    dest: "{{ stack_dir }}/vmagent/hub-password"
+    content: "{{ hub_remote_write.password }}"
+    mode: "0644"   # read by the non-root vmagent container; directory is 0750
+  when: hub_remote_write.url | length > 0
+  notify: Restart stack
+
+# ---------------------------------------------------------------------------
+# Rules: common rules + optional site rules
+# ---------------------------------------------------------------------------
+- name: Alerting rules
+  when: stack_tsdb
+  block:
+    - name: Copy common rules
+      ansible.builtin.copy:
+        src: "{{ role_path }}/../../../rules/"
+        dest: "{{ stack_dir }}/rules/"
+        mode: "0644"
+      notify: Reload vmalert
+    - name: Find site rules
+      ansible.builtin.find:
+        paths: "{{ site_rules_dir }}"
+        patterns: "*.yml"
+      delegate_to: localhost
+      become: false
+      register: _site_rules
+    - name: Copy site rules
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ stack_dir }}/rules/site-{{ item.path | basename }}"
+        mode: "0644"
+      loop: "{{ _site_rules.files }}"
+      loop_control: {label: "{{ item.path | basename }}"}
+      notify: Reload vmalert
+
+    - name: Alertmanager config
+      ansible.builtin.template:
+        src: alertmanager.yml.j2
+        dest: "{{ stack_dir }}/alertmanager/alertmanager.yml"
+        mode: "0644"
+      notify: Reload alertmanager
+
+- name: Matrix receiver config
+  ansible.builtin.template:
+    src: matrix-receiver.yml.j2
+    dest: "{{ stack_dir }}/matrix-receiver/config.yml"
+    mode: "0644"
+  when: stack_matrix_receiver
+  notify: Restart stack
+
+# ---------------------------------------------------------------------------
+# Exporter configs
+# ---------------------------------------------------------------------------
+- name: Exporter configs
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ stack_dir }}/{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - {src: blackbox.yml.j2, dest: blackbox/blackbox.yml, when: "{{ stack_blackbox }}"}
+    - {src: pve.yml.j2, dest: pve/pve.yml, when: "{{ stack_pve_exporter }}"}
+    - {src: snmp-auth.yml.j2, dest: snmp/auth.yml, when: "{{ stack_snmp }}"}
+  when: item.when | bool
+  loop_control: {label: "{{ item.dest }}"}
+  notify: Restart stack
+
+- name: PBS token
+  ansible.builtin.copy:
+    dest: "{{ stack_dir }}/pbs/token"
+    content: "{{ pbs_api.token_value }}"
+    mode: "0644"
+  when: stack_pbs_exporter
+  notify: Restart stack
+
+# ---------------------------------------------------------------------------
+# Grafana
+# ---------------------------------------------------------------------------
+- name: Grafana provisioning
+  when: stack_grafana
+  block:
+    - name: Datasources and dashboard provider
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ stack_dir }}/grafana/provisioning/{{ item.dest }}"
+        mode: "0644"
+      loop:
+        - {src: grafana-datasources.yml.j2, dest: datasources/vm.yml}
+        - {src: grafana-dashboards.yml.j2, dest: dashboards/common.yml}
+      notify: Restart stack
+    - name: Dashboards
+      ansible.builtin.copy:
+        src: "{{ role_path }}/../../../dashboards/"
+        dest: "{{ stack_dir }}/grafana/dashboards/"
+        mode: "0644"
+    - name: Admin password
+      ansible.builtin.copy:
+        dest: "{{ stack_dir }}/grafana/admin-password"
+        content: "{{ grafana_admin_password }}"
+        mode: "0644"
+
+# ---------------------------------------------------------------------------
+# Compose
+# ---------------------------------------------------------------------------
+- name: Compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ stack_dir }}/compose.yml"
+    mode: "0644"
+    validate: docker compose -f %s config --quiet
+  register: _compose
+
+- name: Start / update stack
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans --pull missing
+    chdir: "{{ stack_dir }}"
+  register: _up
+  changed_when: "'Started' in _up.stderr or 'Recreated' in _up.stderr or 'Created' in _up.stderr"

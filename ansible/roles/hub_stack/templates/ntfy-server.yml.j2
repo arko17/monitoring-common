@@ -1,0 +1,24 @@
+# Managed by Ansible.
+base-url: "https://{{ hub_hosts.ntfy }}"
+listen-http: ":80"
+behind-proxy: true
+cache-file: /var/cache/ntfy/cache.db
+cache-duration: 72h
+auth-file: /var/lib/ntfy/user.db
+auth-default-access: deny-all
+enable-signup: false
+enable-login: true
+upstream-base-url: "{{ hub_ntfy_upstream }}"
+auth-users:
+  - "{{ hub_ntfy_admin_user }}:{{ hub_ntfy_admin_password | password_hash('bcrypt', salt=(('ntfy' ~ hub_ntfy_admin_password) | hash('sha1'))[:21] ~ 'e', ident='2a') }}:admin"
+{% for p in hub_ntfy_publishers %}
+  - "{{ p.name }}:{{ p.token | password_hash('bcrypt', salt=(('ntfy' ~ p.name ~ p.token) | hash('sha1'))[:21] ~ 'e', ident='2a') }}:user"
+{% endfor %}
+auth-access:
+{% for p in hub_ntfy_publishers %}
+  - "{{ p.name }}:{{ p.topic }}:wo"
+{% endfor %}
+auth-tokens:
+{% for p in hub_ntfy_publishers %}
+  - "{{ p.name }}:{{ p.token }}:{{ p.name }}"
+{% endfor %}

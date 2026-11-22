@@ -1,0 +1,196 @@
+# Managed by Ansible (common/ansible/roles/monitoring_stack). Do not edit on the host.
+name: monitoring
+
+x-defaults: &defaults
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+  deploy:
+    resources:
+      limits: {memory: {{ stack_limits.default.mem }}, cpus: "{{ stack_limits.default.cpus }}"}
+
+services:
+  vmagent:
+    <<: *defaults
+    image: {{ stack_images.vmagent }}
+    command:
+      - -promscrape.config=/etc/vmagent/scrape.yml
+      - -promscrape.config.strictParse=true
+      - -remoteWrite.tmpDataPath=/vmagent-data
+      - -remoteWrite.maxDiskUsagePerURL=2GB
+      - -remoteWrite.label=site={{ site_name }}
+{% if stack_tsdb %}
+      - -remoteWrite.url=http://victoriametrics:8428/api/v1/write
+{% endif %}
+{% if hub_remote_write.url %}
+      - -remoteWrite.url={{ hub_remote_write.url }}
+{% endif %}
+{% if stack_tsdb and hub_remote_write.url %}
+      - -remoteWrite.basicAuth.username=,{{ hub_remote_write.username }}
+      - -remoteWrite.basicAuth.passwordFile=,/etc/vmagent/hub-password
+{% elif hub_remote_write.url %}
+      - -remoteWrite.basicAuth.username={{ hub_remote_write.username }}
+      - -remoteWrite.basicAuth.passwordFile=/etc/vmagent/hub-password
+{% endif %}
+    extra_hosts: ["host.docker.internal:host-gateway"]   # scrape services on the stack host itself
+{% if vmagent_extra_networks %}
+    networks: [default{% for n in vmagent_extra_networks %}, {{ n }}{% endfor %}]
+{% endif %}
+    volumes:
+      - ./vmagent:/etc/vmagent:ro
+      - vmagent-data:/vmagent-data
+    deploy:
+      resources:
+        limits: {memory: {{ stack_limits.vmagent.mem }}, cpus: "{{ stack_limits.vmagent.cpus }}"}
+
+{% if stack_tsdb %}
+  victoriametrics:
+    <<: *defaults
+    image: {{ stack_images.victoriametrics }}
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod={{ vm_retention }}
+      - -selfScrapeInterval=0
+    volumes:
+      - vm-data:/storage
+    ports:
+      - "127.0.0.1:8428:8428"
+    deploy:
+      resources:
+        limits: {memory: {{ stack_limits.victoriametrics.mem }}, cpus: "{{ stack_limits.victoriametrics.cpus }}"}
+
+  vmalert:
+    <<: *defaults
+    image: {{ stack_images.vmalert }}
+    command:
+      - -rule=/etc/vmalert/rules/*.yml
+      - -datasource.url=http://victoriametrics:8428
+      # via vmagent → ALERTS series also reach the hub (site label added there)
+      - -remoteWrite.url=http://vmagent:8429
+      - -remoteRead.url=http://victoriametrics:8428
+      - -notifier.url=http://alertmanager:9093
+      - -external.url={{ grafana_root_url }}
+      - -evaluationInterval=1m
+    volumes:
+      - ./rules:/etc/vmalert/rules:ro
+    depends_on: [victoriametrics, alertmanager]
+
+  alertmanager:
+    <<: *defaults
+    image: {{ stack_images.alertmanager }}
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=http://{{ ansible_host | default(inventory_hostname) }}:9093
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+      - am-data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+{% endif %}
+
+{% if stack_grafana %}
+  grafana:
+    <<: *defaults
+    image: {{ stack_images.grafana }}
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /etc/grafana/admin-password
+      GF_SERVER_ROOT_URL: {{ grafana_root_url }}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/admin-password:/etc/grafana/admin-password:ro
+    ports:
+      - "{{ stack_bind }}:{{ grafana_port }}:3000"
+    deploy:
+      resources:
+        limits: {memory: {{ stack_limits.grafana.mem }}, cpus: "{{ stack_limits.grafana.cpus }}"}
+{% endif %}
+
+{% if stack_beszel_hub %}
+  beszel:
+    <<: *defaults
+    image: {{ stack_images.beszel }}
+    environment:
+      APP_URL: http://{{ ansible_host | default(inventory_hostname) }}:{{ beszel_port }}
+    volumes:
+      - beszel-data:/beszel_data
+    ports:
+      - "{{ stack_bind }}:{{ beszel_port }}:8090"
+{% endif %}
+
+{% if stack_blackbox %}
+  blackbox:
+    <<: *defaults
+    image: {{ stack_images.blackbox }}
+    command: [--config.file=/etc/blackbox/blackbox.yml]
+    cap_add: [NET_RAW]   # ICMP probes
+    volumes:
+      - ./blackbox:/etc/blackbox:ro
+{% endif %}
+
+{% if stack_snmp %}
+  snmp:
+    <<: *defaults
+    image: {{ stack_images.snmp }}
+    command: [--config.file=/etc/snmp_exporter/snmp.yml, --config.file=/etc/snmp_exporter/auth.yml]
+    volumes:
+      - ./snmp/auth.yml:/etc/snmp_exporter/auth.yml:ro
+{% endif %}
+
+{% if stack_pve_exporter %}
+  pve:
+    <<: *defaults
+    image: {{ stack_images.pve }}
+    command: [--config.file=/etc/prometheus/pve.yml]
+    volumes:
+      - ./pve/pve.yml:/etc/prometheus/pve.yml:ro
+{% endif %}
+
+{% if stack_pbs_exporter %}
+  pbs:
+    <<: *defaults
+    image: {{ stack_images.pbs }}
+    environment:
+      PBS_USERNAME: {{ pbs_api.username }}
+      PBS_API_TOKEN_NAME: {{ pbs_api.token_name }}
+      PBS_API_TOKEN_FILE: /run/secrets/pbs-token
+      PBS_INSECURE: "true"
+    volumes:
+      - ./pbs/token:/run/secrets/pbs-token:ro
+{% endif %}
+
+{% if stack_matrix_receiver %}
+  matrix-receiver:
+    <<: *defaults
+    image: {{ stack_images.matrix_receiver }}
+    command: [--config-path=/etc/matrix-receiver/config.yml]
+    volumes:
+      - ./matrix-receiver/config.yml:/etc/matrix-receiver/config.yml:ro
+{% endif %}
+
+{% if vmagent_extra_networks %}
+networks:
+{% for n in vmagent_extra_networks %}
+  {{ n }}:
+    external: true
+{% endfor %}
+
+{% endif %}
+volumes:
+  vmagent-data:
+{% if stack_tsdb %}
+  vm-data:
+  am-data:
+{% endif %}
+{% if stack_grafana %}
+  grafana-data:
+{% endif %}
+{% if stack_beszel_hub %}
+  beszel-data:
+{% endif %}

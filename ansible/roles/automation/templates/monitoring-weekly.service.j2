@@ -1,0 +1,9 @@
+[Unit]
+Description=Monitoring automation (weekly)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/monitoring-run weekly
+TimeoutStartSec=2h

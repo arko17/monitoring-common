@@ -1,0 +1,18 @@
+# Managed by Ansible. Rules that only the hub can evaluate.
+groups:
+  - name: hub-sites
+    interval: 1m
+    rules:
+{% for s in hub_sites %}
+      - alert: SiteSilent
+        expr: absent_over_time(up{site="{{ s.name }}"}[{{ hub_site_silence }}])
+        labels: {severity: critical, site: "{{ s.name }}"}
+        annotations:
+          summary: "Site {{ s.name }} has sent no data for {{ hub_site_silence }} (stack, host or uplink down)"
+{% endfor %}
+      - alert: ExternalCheckFailing
+        expr: gatus_results_endpoint_success == 0
+        for: 10m
+        labels: {severity: info}   # Gatus already notifies via ntfy; this is for dashboards
+        annotations:
+          summary: "External check {{ '{{' }} $labels.group {{ '}}' }}/{{ '{{' }} $labels.name {{ '}}' }} failing (Gatus)"

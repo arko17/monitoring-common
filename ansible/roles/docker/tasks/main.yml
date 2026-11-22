@@ -1,0 +1,36 @@
+# Docker CE from the official repository (Debian/Ubuntu). Updates come with
+# unattended-upgrades / the regular apt runs.
+- name: Install prerequisites
+  ansible.builtin.apt:
+    name: [ca-certificates, curl, git]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: "https://download.docker.com/linux/{{ ansible_distribution | lower }}"
+    suites: "{{ ansible_distribution_release }}"
+    components: stable
+    signed_by: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"
+
+- name: Install Docker engine and compose plugin
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+    state: present
+    update_cache: true
+
+- name: Allow Docker images in unattended-upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52unattended-docker
+    mode: "0644"
+    content: |
+      Unattended-Upgrade::Origins-Pattern { "origin=Docker"; };
+
+- name: Enable Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started

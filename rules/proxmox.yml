@@ -1,0 +1,45 @@
+groups:
+  - name: proxmox
+    interval: 2m
+    rules:
+      - alert: PveGuestDown
+        # Only guests with onboot=1 are expected to run.
+        expr: pve_up{id=~"qemu/.*|lxc/.*"} == 0 and on(id, instance) pve_onboot_status == 1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: Proxmox guest {{ $labels.id }} not running"
+
+      - alert: PveStorageAlmostFull
+        expr: pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes > 0.85
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: storage {{ $labels.id }} >85% full"
+
+  - name: pbs
+    interval: 15m
+    rules:
+      - alert: PbsBackupTooOld
+        # pbs-exporter: timestamp of the latest snapshot per backup group (backup_type ct|vm).
+        # Groups without a backup for >30 days are treated as retired guests and ignored.
+        expr: |
+          (time() - pbs_snapshot_vm_last_timestamp > 36 * 3600)
+          and (time() - pbs_snapshot_vm_last_timestamp < 30 * 86400)
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.site }}: no backup of {{ $labels.backup_type }}/{{ $labels.vm_id }} ({{ $labels.vm_name }}) on {{ $labels.datastore }} for {{ $value | humanizeDuration }}"
+
+      - alert: PbsDatastoreAlmostFull
+        expr: pbs_used / pbs_size > 0.85
+        for: 1h
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: PBS datastore {{ $labels.datastore }} >85% full"
+
+      - alert: PbsExporterDown
+        expr: up{job="pbs"} == 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: PBS exporter unreachable, backup state unknown"

@@ -1,0 +1,6 @@
+# Managed by Ansible.
+default:
+  user: {{ pve_api.user }}
+  token_name: {{ pve_api.token_name }}
+  token_value: "{{ pve_api.token_value }}"
+  verify_ssl: {{ pve_api.verify_ssl | bool | lower }}

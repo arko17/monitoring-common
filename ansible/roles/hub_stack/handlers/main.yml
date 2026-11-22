@@ -1,0 +1,4 @@
+# Simple and robust: recreate changed services. vmalert/alertmanager state is in volumes.
+- name: Restart hub
+  ansible.builtin.command: docker compose up -d --force-recreate --remove-orphans
+  args: {chdir: "{{ hub_dir }}"}

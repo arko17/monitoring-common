@@ -1,0 +1,3 @@
+# renovate: datasource=github-releases depName=prometheus-community/ipmi_exporter
+ipmi_exporter_version: "1.10.1"
+ipmi_exporter_listen: "0.0.0.0:9290"
