@@ -3,12 +3,27 @@ groups:
     interval: 2m
     rules:
       - alert: PveGuestDown
-        # Only guests with onboot=1 are expected to run.
-        expr: pve_up{id=~"qemu/.*|lxc/.*"} == 0 and on(id, instance) pve_onboot_status == 1
+        # Only guests with onboot=1 are expected to run. Guests that are stopped on purpose
+        # get the Proxmox tag "nomonitor" (Proxmox UI → guest → Tags) and are ignored.
+        expr: |
+          pve_up{id=~"qemu/.*|lxc/.*"} == 0
+          and on(id, instance) pve_onboot_status == 1
+          unless on(id, instance) pve_guest_info{tags=~"(.*;)?nomonitor(;.*)?"}
         for: 10m
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.site }}: Proxmox guest {{ $labels.id }} not running"
+
+      - alert: PveGuestDiskAlmostFull
+        # Root disk of a running container (VMs report 0 without guest agent, so LXC only).
+        expr: |
+          (pve_disk_usage_bytes{id=~"lxc/.*"} / pve_disk_size_bytes > 0.90)
+          and on(id, instance) pve_up == 1
+          unless on(id, instance) pve_guest_info{tags=~"(.*;)?nomonitor(;.*)?"}
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: disk of guest {{ $labels.id }} is {{ $value | humanizePercentage }} full"
 
       - alert: PveStorageAlmostFull
         expr: pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes > 0.85

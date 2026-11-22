@@ -6,6 +6,8 @@ node_exporter_textfile_dir: /var/lib/node_exporter/textfile
 node_exporter_extra_flags:
   - --collector.systemd
   - --collector.processes
-  - "--collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+|var/lib/containers/.+)($|/)"
+  # also skip Proxmox container disks (ZFS subvol-<id>-disk-<n>) mounted on the host: they are
+  # guest disks, not host filesystems (guest disk usage comes from the pve exporter)
+  - "--collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+|var/lib/containers/.+)($|/)|/(subvol|basevol)-[0-9]+-disk-[0-9]+$"
 # Write apt_upgrades_pending / node_reboot_required (Debian/Ubuntu/PVE only)
 node_exporter_apt_metrics: "{{ ansible_os_family == 'Debian' }}"
