@@ -77,7 +77,15 @@ pbs_api:                      # PBS user "monitoring@pbs" with role DatastoreAud
   username: monitoring@pbs
   token_name: exporter
   token_value: ""             # vault
-synology_snmp_community: ""   # vault; SNMP v2c read-only on the NAS
+# Synology SNMP. v3 (authPriv) is the default; v2c only as fallback.
+synology_snmp:
+  version: 3
+  username: monitoring
+  auth_protocol: SHA          # DSM: MD5 | SHA
+  auth_password: ""           # vault, >= 8 chars
+  priv_protocol: AES          # DSM: DES | AES
+  priv_password: ""           # vault, >= 8 chars
+synology_snmp_community: ""   # only for version 2: v2c read-only community (vault)
 
 # --- What to scrape (besides the inventory groups) -------------------------
 # Inventory groups that drive scraping automatically:

@@ -1,5 +1,16 @@
 # Managed by Ansible.
 auths:
-  synology_v2:
+{% if synology_snmp.version | int == 3 %}
+  synology:
+    version: 3
+    username: "{{ synology_snmp.username }}"
+    security_level: authPriv
+    auth_protocol: {{ synology_snmp.auth_protocol }}
+    password: "{{ synology_snmp.auth_password }}"
+    priv_protocol: {{ synology_snmp.priv_protocol }}
+    priv_password: "{{ synology_snmp.priv_password }}"
+{% else %}
+  synology:
     community: "{{ synology_snmp_community }}"
     version: 2
+{% endif %}

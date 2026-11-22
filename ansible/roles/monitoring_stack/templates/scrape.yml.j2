@@ -56,7 +56,7 @@ scrape_configs:
   - job_name: synology
     scrape_interval: 2m
     metrics_path: /snmp
-    params: {module: [if_mib, synology], auth: [synology_v2]}
+    params: {module: [if_mib, synology], auth: [synology]}
     file_sd_configs: [{files: [/etc/vmagent/file_sd/synology.json]}]
     relabel_configs:
       - {source_labels: [__address__], target_label: __param_target}
