@@ -24,3 +24,12 @@ modules:
     prober: tcp
     timeout: 5s
     tcp: {tls: true}
+  dns:                     # resolver answers a real query (e.g. Pi-hole)
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip4
+      transport_protocol: udp
+      query_name: "uni-tuebingen.de"
+      query_type: "A"
+      valid_rcodes: [NOERROR]
