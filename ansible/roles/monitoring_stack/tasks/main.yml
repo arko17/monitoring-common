@@ -54,6 +54,8 @@
       targets: "{{ query('ansible.builtin.inventory_hostnames', 'bare_metal') | map('monitoring_target', hostvars, 9290) | list }}"
     - file: pve.json
       targets: "{{ query('ansible.builtin.inventory_hostnames', 'pve_hosts') | map('monitoring_target', hostvars) | list }}"
+    - file: pve_cluster.json   # first pve host only; move another to the top of pve_hosts if it is down
+      targets: "{{ query('ansible.builtin.inventory_hostnames', 'pve_hosts')[:1] | map('monitoring_target', hostvars) | list }}"
     - file: pbs.json
       targets: "{{ query('ansible.builtin.inventory_hostnames', 'pbs_hosts') | map('monitoring_target', hostvars) | list }}"
     - file: synology.json

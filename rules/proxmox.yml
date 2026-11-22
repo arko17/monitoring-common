@@ -25,6 +25,14 @@ groups:
         annotations:
           summary: "{{ $labels.site }}: disk of guest {{ $labels.id }} is {{ $value | humanizePercentage }} full"
 
+      - alert: PveClusterViewLost
+        # The node serving the cluster-wide data is down: guest/storage alerts are blind.
+        expr: up{job="pve-cluster"} == 0
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: no cluster-wide Proxmox data from {{ $labels.instance }}. Move another node to the top of pve_hosts"
+
       - alert: PveStorageAlmostFull
         expr: pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes > 0.85
         for: 30m

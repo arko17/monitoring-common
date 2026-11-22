@@ -35,10 +35,19 @@ scrape_configs:
     file_sd_configs: [{files: [/etc/vmagent/file_sd/ipmi.json]}]
 
 {% if stack_pve_exporter %}
+  # Node-level data from every Proxmox node (survives the loss of any single node) ...
   - job_name: pve
     metrics_path: /pve
-    params: {module: [default], cluster: ["1"], node: ["1"]}
+    params: {module: [default], cluster: ["0"], node: ["1"]}
     file_sd_configs: [{files: [/etc/vmagent/file_sd/pve.json]}]
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {target_label: __address__, replacement: "pve:9221"}
+  # ... and cluster-wide data (guests, storage) only once, from the first host in pve_hosts.
+  - job_name: pve-cluster
+    metrics_path: /pve
+    params: {module: [default], cluster: ["1"], node: ["0"]}
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/pve_cluster.json]}]
     relabel_configs:
       - {source_labels: [__address__], target_label: __param_target}
       - {target_label: __address__, replacement: "pve:9221"}
