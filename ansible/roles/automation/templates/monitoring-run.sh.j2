@@ -36,11 +36,11 @@ if {
 monitoring_job_last_success_timestamp_seconds{job_name="$job"} $(date +%s)
 PROM
   mv "$textfile.tmp" "$textfile"
-  tail -c 9000 "$log" | ping "" --data-binary @-
-  cat "$log"; rm -f "$log"
+  tail -c 9000 "$log" > "$log.tail"; ping "" --data-binary @"$log.tail"
+  cat "$log"; rm -f "$log" "$log.tail"
 else
   rc=$?
-  tail -c 9000 "$log" | ping /fail --data-binary @-
-  cat "$log"; rm -f "$log"
+  tail -c 9000 "$log" > "$log.tail"; ping /fail --data-binary @"$log.tail"
+  cat "$log"; rm -f "$log" "$log.tail"
   exit $rc
 fi
