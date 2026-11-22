@@ -4,11 +4,15 @@ auths:
   synology:
     version: 3
     username: "{{ synology_snmp.username }}"
-    security_level: authPriv
     auth_protocol: {{ synology_snmp.auth_protocol }}
-    password: "{{ synology_snmp.auth_password }}"
+    password: {{ synology_snmp.auth_password | to_json }}
+{% if synology_snmp.priv_password | default('') | length > 0 %}
+    security_level: authPriv
     priv_protocol: {{ synology_snmp.priv_protocol }}
-    priv_password: "{{ synology_snmp.priv_password }}"
+    priv_password: {{ synology_snmp.priv_password | to_json }}
+{% else %}
+    security_level: authNoPriv    # DSM: privacy disabled
+{% endif %}
 {% else %}
   synology:
     community: "{{ synology_snmp_community }}"

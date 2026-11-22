@@ -84,7 +84,7 @@ synology_snmp:
   auth_protocol: SHA          # DSM: MD5 | SHA
   auth_password: ""           # vault, >= 8 chars
   priv_protocol: AES          # DSM: DES | AES
-  priv_password: ""           # vault, >= 8 chars
+  priv_password: ""           # vault, >= 8 chars; empty = authNoPriv (privacy off in DSM)
 synology_snmp_community: ""   # only for version 2: v2c read-only community (vault)
 
 # --- What to scrape (besides the inventory groups) -------------------------
