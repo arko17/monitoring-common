@@ -21,6 +21,12 @@ endpoints:
     group: {{ e.group | default('external') | to_json }}
     url: {{ e.url | to_json }}
     interval: {{ e.interval | default('2m') }}
+{% if e.method is defined %}
+    method: {{ e.method | to_json }}
+{% endif %}
+{% if e.headers is defined %}
+    headers: {{ e.headers | to_json }}
+{% endif %}
 {% if e.dns is defined %}
     dns: {{ e.dns | to_json }}
 {% endif %}
