@@ -3,21 +3,28 @@ global:
   scrape_interval: {{ scrape_interval }}
   scrape_timeout: 20s
 
+# Self-metrics nobody uses (flag, go_*, Grafana internals) are dropped via the &drop_self anchor.
 scrape_configs:
   # --- monitoring stack itself ---------------------------------------------
   - job_name: vmagent
     static_configs: [{targets: ["localhost:8429"]}]
+    metric_relabel_configs: &drop_self
+      - {source_labels: [__name__], regex: "flag|go_.*|grafana_.*_bucket|grafana_feature_toggles_info|grafana_apiserver_.*", action: drop}
 {% if stack_tsdb %}
   - job_name: victoriametrics
     static_configs: [{targets: ["victoriametrics:8428"]}]
+    metric_relabel_configs: *drop_self
   - job_name: vmalert
     static_configs: [{targets: ["vmalert:8880"]}]
+    metric_relabel_configs: *drop_self
   - job_name: alertmanager
     static_configs: [{targets: ["alertmanager:9093"]}]
+    metric_relabel_configs: *drop_self
 {% endif %}
 {% if stack_grafana %}
   - job_name: grafana
     static_configs: [{targets: ["grafana:3000"]}]
+    metric_relabel_configs: *drop_self
 {% endif %}
 {% if stack_matrix_receiver %}
   - job_name: matrix-receiver
@@ -27,6 +34,12 @@ scrape_configs:
   # --- servers ---------------------------------------------------------------
   - job_name: node
     file_sd_configs: [{files: [/etc/vmagent/file_sd/node.json]}]
+    metric_relabel_configs:   # unused series dropped at scrape time (checked against all rules/dashboards)
+      # systemd: only the "failed" state is used (SystemdUnitFailed)
+      - {source_labels: [__name__, state], regex: "node_systemd_unit_state;(active|inactive|activating|deactivating)", action: drop}
+      - {source_labels: [__name__], regex: "node_cpu_scaling_governor|node_scrape_collector_.*", action: drop}
+      # virtual NICs of containers/VMs on Proxmox hosts (churn with every guest restart)
+      - {source_labels: [__name__, device], regex: "node_network_.*;(veth|tap|fwbr|fwpr|fwln).*", action: drop}
   - job_name: smartctl
     scrape_interval: 5m
     file_sd_configs: [{files: [/etc/vmagent/file_sd/smartctl.json]}]
