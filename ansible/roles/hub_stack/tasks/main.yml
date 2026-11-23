@@ -94,6 +94,13 @@
     dest: "{{ hub_dir }}/grafana/dashboards/"
     mode: "0644"
 
+- name: Hub-only dashboards (dashboards/*.json in the hub repo, e.g. Home)
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ hub_dir }}/grafana/dashboards/"
+    mode: "0644"
+  with_fileglob: "{{ playbook_dir }}/dashboards/*.json"
+
 - name: Grafana admin password
   ansible.builtin.copy:
     dest: "{{ hub_dir }}/grafana/admin-password"

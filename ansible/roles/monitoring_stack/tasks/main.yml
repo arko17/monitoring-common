@@ -64,6 +64,8 @@
       targets: "{{ query('ansible.builtin.inventory_hostnames', 'workstations') | map('monitoring_target', hostvars) | list }}"
     - file: services.json
       targets: "{{ service_probes | map('probe_target') | list }}"
+    - file: devices.json
+      targets: "{{ device_probes | map('probe_target') | list }}"
   loop_control: {label: "{{ item.file }}"}
 
 - name: Render vmagent scrape config

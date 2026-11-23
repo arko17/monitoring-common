@@ -81,6 +81,14 @@ scrape_configs:
       - {source_labels: [__address__], target_label: __param_target}
       - {source_labels: [module], target_label: __param_module}
       - {target_label: __address__, replacement: "blackbox:9115"}
+  - job_name: blackbox-devices      # informational only, no alerts
+    scrape_interval: 2m
+    metrics_path: /probe
+    file_sd_configs: [{files: [/etc/vmagent/file_sd/devices.json]}]
+    relabel_configs:
+      - {source_labels: [__address__], target_label: __param_target}
+      - {source_labels: [module], target_label: __param_module}
+      - {target_label: __address__, replacement: "blackbox:9115"}
   - job_name: blackbox-workstations
     scrape_interval: 2m
     metrics_path: /probe
