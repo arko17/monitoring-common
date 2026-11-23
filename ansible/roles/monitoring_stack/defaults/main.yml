@@ -44,6 +44,8 @@ stack_limits:
 stack_bind: "0.0.0.0"
 grafana_port: 3000
 beszel_port: 8090
+# Public URL of the Beszel hub (links in the UI). Override when a TLS proxy sits in front.
+beszel_app_url: "http://{{ ansible_host | default(inventory_hostname) }}:{{ beszel_port }}"
 
 # --- Hub uplink (remove this block / set url to "" on handover) ------------
 hub_remote_write:
