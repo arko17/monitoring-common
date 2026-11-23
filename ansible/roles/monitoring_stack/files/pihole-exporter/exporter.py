@@ -92,8 +92,10 @@ def render():
             "# TYPE pihole_blocking_enabled gauge", f"pihole_blocking_enabled {1 if blocking == 'enabled' else 0}",
             "# HELP pihole_upstream_queries_24h Queries answered per upstream / source (24 h).",
             "# TYPE pihole_upstream_queries_24h gauge"]
-    for u in ups:
-        out.append(f'pihole_upstream_queries_24h{{upstream="{esc(u.get("name") or u.get("ip"))}"}} {u.get("count", 0)}')
+    for u in ups:   # name alone is not unique (same resolver via IPv4 and IPv6)
+        addr = f'{u.get("ip") or ""}#{u.get("port") or ""}'.strip("#")
+        out.append(f'pihole_upstream_queries_24h{{upstream="{esc(u.get("name") or u.get("ip"))}",address="{esc(addr)}"}} '
+                   f'{u.get("count", 0)}')
     out += ["# HELP pihole_update_available 1 if a newer version is available for the component.",
             "# TYPE pihole_update_available gauge"]
     for comp in ("core", "web", "ftl"):
