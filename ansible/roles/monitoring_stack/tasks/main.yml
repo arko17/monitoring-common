@@ -32,6 +32,7 @@
     - snmp
     - pve
     - pbs
+    - pihole
     - matrix-receiver
 
 # ---------------------------------------------------------------------------
@@ -156,6 +157,24 @@
   when: stack_rct_exporter
   register: _rct_src
 
+- name: Pi-hole exporter sources
+  ansible.builtin.copy:
+    src: pihole-exporter/
+    dest: "{{ stack_dir }}/pihole-exporter/"
+    mode: "0644"
+  when: stack_pihole_exporter
+  register: _pihole_src
+
+- name: Pi-hole API password
+  ansible.builtin.copy:
+    dest: "{{ stack_dir }}/pihole/password"
+    content: "{{ pihole_password }}"
+    owner: "65534"
+    group: "65534"
+    mode: "0400"
+  when: stack_pihole_exporter
+  notify: Restart stack
+
 - name: PBS token
   ansible.builtin.copy:
     dest: "{{ stack_dir }}/pbs/token"
@@ -210,6 +229,12 @@
     cmd: docker compose build rct
     chdir: "{{ stack_dir }}"
   when: stack_rct_exporter and _rct_src is changed
+
+- name: Build Pi-hole exporter image (sources changed)
+  ansible.builtin.command:
+    cmd: docker compose build pihole
+    chdir: "{{ stack_dir }}"
+  when: stack_pihole_exporter and _pihole_src is changed
 
 - name: Start / update stack
   ansible.builtin.command:

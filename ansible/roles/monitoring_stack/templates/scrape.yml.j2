@@ -79,6 +79,12 @@ scrape_configs:
     static_configs: [{targets: ["rct:9894"], labels: {instance: solar-inverter}}]
 {% endif %}
 
+{% if stack_pihole_exporter %}
+  - job_name: pihole
+    scrape_interval: 60s
+    static_configs: [{targets: ["pihole:9617"], labels: {instance: pihole}}]
+{% endif %}
+
 {% if stack_blackbox %}
   # --- probes ----------------------------------------------------------------
   - job_name: blackbox-services

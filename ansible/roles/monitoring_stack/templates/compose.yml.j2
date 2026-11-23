@@ -175,6 +175,18 @@ services:
       RCT_PORT: "{{ rct_inverter_port }}"
 {% endif %}
 
+{% if stack_pihole_exporter %}
+  pihole:
+    <<: *defaults
+    build: ./pihole-exporter
+    image: local/pihole-exporter:1
+    environment:
+      PIHOLE_URL: "{{ pihole_url }}"
+      PIHOLE_PASSWORD_FILE: /run/secrets/pihole-password
+    volumes:
+      - ./pihole/password:/run/secrets/pihole-password:ro
+{% endif %}
+
 {% if stack_matrix_receiver %}
   matrix-receiver:
     <<: *defaults

@@ -18,6 +18,9 @@ stack_pbs_exporter: false
 stack_rct_exporter: false     # RCT Power inverter (solar), see rct_inverter_host
 rct_inverter_host: ""
 rct_inverter_port: 8899
+stack_pihole_exporter: false  # Pi-hole v6 API
+pihole_url: ""                # http://192.168.2.10
+pihole_password: ""           # vault: app password (Settings → Web interface / API)
 
 # Pinned images. Renovate (docker datasource) bumps these via the regex manager.
 stack_images:

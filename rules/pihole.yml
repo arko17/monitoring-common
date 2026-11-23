@@ -1,0 +1,23 @@
+# Pi-hole (v6 API exporter), only active where the pihole exporter runs.
+groups:
+  - name: pihole
+    interval: 1m
+    rules:
+      - alert: PiholeUnreadable
+        expr: pihole_up == 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: the Pi-hole API cannot be read for 15 minutes"
+      - alert: PiholeBlockingDisabled
+        expr: pihole_blocking_enabled == 0
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: Pi-hole ad blocking has been off for 30 minutes"
+      - alert: PiholeUpdateAvailable
+        expr: max by (site, component) (pihole_update_available) == 1
+        for: 1d
+        labels: {severity: info}
+        annotations:
+          summary: "{{ $labels.site }}: Pi-hole {{ $labels.component }} update available"
