@@ -43,7 +43,8 @@ groups:
           summary: "{{ $labels.site }}/{{ $labels.instance }}: OOM killer was active"
 
       - alert: SystemdUnitFailed
-        expr: node_systemd_unit_state{state="failed"} == 1
+        # *-wait-online often fails harmlessly at boot (network came up late / no carrier on a spare NIC).
+        expr: node_systemd_unit_state{state="failed", name!~"(NetworkManager|systemd-networkd)-wait-online\\.service"} == 1
         for: 10m
         labels: {severity: warning}
         annotations:

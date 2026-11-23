@@ -34,7 +34,10 @@ groups:
           summary: "{{ $labels.site }}: no cluster-wide Proxmox data from {{ $labels.instance }}. Move another node to the top of pve_hosts"
 
       - alert: PveStorageAlmostFull
-        expr: pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes > 0.85
+        # Thick LVM ("lvm") reports *allocated* space, not used space: a fully allocated VG is not full.
+        expr: |
+          (pve_disk_usage_bytes{id=~"storage/.*"} / pve_disk_size_bytes > 0.85)
+          unless on(id, instance) pve_storage_info{plugintype="lvm"}
         for: 30m
         labels: {severity: warning}
         annotations:

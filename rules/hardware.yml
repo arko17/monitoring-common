@@ -29,7 +29,8 @@ groups:
           summary: "{{ $labels.site }}/{{ $labels.instance }}: {{ $labels.device }} at {{ $value }}°C"
 
       - alert: IpmiSensorCritical
-        expr: ipmi_sensor_state == 2
+        # Discrete "Entity Presence" sensors (backplane present yes/no) are no health values.
+        expr: ipmi_sensor_state{type!~".*Presence.*"} == 2
         for: 5m
         labels: {severity: critical}
         annotations:
