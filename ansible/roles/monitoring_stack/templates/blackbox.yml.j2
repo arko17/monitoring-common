@@ -33,3 +33,7 @@ modules:
       query_name: "uni-tuebingen.de"
       query_type: "A"
       valid_rcodes: [NOERROR]
+{% if blackbox_extra_modules %}
+  # site-specific modules (blackbox_extra_modules)
+  {{ blackbox_extra_modules | to_nice_yaml(indent=2) | indent(2) }}
+{% endif %}

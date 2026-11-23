@@ -96,6 +96,7 @@ synology_snmp_community: ""   # only for version 2: v2c read-only community (vau
 #   synology      → snmp_exporter (synology module)
 #   workstations  → ICMP ping via blackbox (details live in Beszel)
 service_probes: []            # [{name: matrix, url: https://matrix.example/_matrix/client/versions}]
+blackbox_extra_modules: {}    # extra blackbox modules, e.g. HTTP with Host header/SNI to reach a vhost by internal IP
 extra_scrape_configs: []      # raw vmagent scrape_configs entries
 vmagent_extra_networks: []    # existing docker networks vmagent joins (e.g. to scrape other compose projects)
 site_rules_dir: "{{ playbook_dir }}/rules"   # optional site-specific rules
