@@ -30,6 +30,15 @@ stack_images:
   pbs: ghcr.io/natrontech/pbs-exporter:v0.10.0
   matrix_receiver: metio/matrix-alertmanager-receiver:2026.9.23
 
+# UIDs the containers run as (from the pinned images). Secret files are owned by the
+# container that reads them with mode 0400; re-check after major image upgrades.
+stack_uids:
+  alertmanager: 65534     # prom/alertmanager: nobody
+  grafana: 472            # grafana/grafana
+  pve: 101                # prompve/prometheus-pve-exporter
+  pbs: 65532              # pbs-exporter: distroless nonroot
+  matrix_receiver: 65532  # metio/matrix-alertmanager-receiver: distroless nonroot
+
 vm_retention: 90d
 scrape_interval: 30s
 

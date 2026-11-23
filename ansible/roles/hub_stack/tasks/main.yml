@@ -58,14 +58,16 @@
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ hub_dir }}/{{ item.dest }}"
-    mode: "0644"
+    owner: "{{ item.owner | default(0) }}"
+    group: "{{ item.owner | default(0) }}"
+    mode: "{{ item.mode | default('0644') }}"
   loop:   # svc = the only container that needs a restart when this file changes
-    - {src: Caddyfile.j2, dest: caddy/Caddyfile, svc: caddy}
+    - {src: Caddyfile.j2, dest: caddy/Caddyfile, svc: caddy, mode: "0600"}                       # bcrypt hashes
     - {src: scrape.yml.j2, dest: vmagent/scrape.yml, svc: vmagent}
     - {src: hub-rules.yml.j2, dest: rules/hub.yml, svc: vmalert}
-    - {src: alertmanager.yml.j2, dest: alertmanager/alertmanager.yml, svc: alertmanager}
-    - {src: gatus.yaml.j2, dest: gatus/config.yaml, svc: gatus}
-    - {src: ntfy-server.yml.j2, dest: ntfy/server.yml, svc: ntfy}
+    - {src: alertmanager.yml.j2, dest: alertmanager/alertmanager.yml, svc: alertmanager, owner: 65534, mode: "0400"}   # ntfy token
+    - {src: gatus.yaml.j2, dest: gatus/config.yaml, svc: gatus, mode: "0600"}                    # ntfy token
+    - {src: ntfy-server.yml.j2, dest: ntfy/server.yml, svc: ntfy, mode: "0600"}                  # tokens + hashes
     - {src: grafana-datasources.yml.j2, dest: grafana/provisioning/datasources/vm.yml, svc: grafana}
     - {src: grafana-dashboards.yml.j2, dest: grafana/provisioning/dashboards/common.yml, svc: grafana}
   loop_control: {label: "{{ item.dest }}"}
@@ -96,7 +98,9 @@
   ansible.builtin.copy:
     dest: "{{ hub_dir }}/grafana/admin-password"
     content: "{{ hub_grafana_admin_password }}"
-    mode: "0644"
+    owner: "472"
+    group: "0"
+    mode: "0400"
 
 - name: Compose file
   ansible.builtin.template:

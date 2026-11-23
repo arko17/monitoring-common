@@ -77,7 +77,7 @@
   ansible.builtin.copy:
     dest: "{{ stack_dir }}/vmagent/hub-password"
     content: "{{ hub_remote_write.password }}"
-    mode: "0644"   # read by the non-root vmagent container; directory is 0750
+    mode: "0600"   # vmagent runs as root
   when: hub_remote_write.url | length > 0
   notify: Restart stack
 
@@ -109,18 +109,22 @@
       loop_control: {label: "{{ item.path | basename }}"}
       notify: Reload vmalert
 
-    - name: Alertmanager config
+    - name: Alertmanager config (contains ntfy token / Matrix receiver password)
       ansible.builtin.template:
         src: alertmanager.yml.j2
         dest: "{{ stack_dir }}/alertmanager/alertmanager.yml"
-        mode: "0644"
+        owner: "{{ stack_uids.alertmanager }}"
+        group: "{{ stack_uids.alertmanager }}"
+        mode: "0400"
       notify: Reload alertmanager
 
 - name: Matrix receiver config
   ansible.builtin.template:
     src: matrix-receiver.yml.j2
     dest: "{{ stack_dir }}/matrix-receiver/config.yml"
-    mode: "0644"
+    owner: "{{ stack_uids.matrix_receiver }}"
+    group: "{{ stack_uids.matrix_receiver }}"
+    mode: "0400"
   when: stack_matrix_receiver
   notify: Restart stack
 
@@ -131,11 +135,13 @@
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ stack_dir }}/{{ item.dest }}"
-    mode: "0644"
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
   loop:
-    - {src: blackbox.yml.j2, dest: blackbox/blackbox.yml, when: "{{ stack_blackbox }}"}
-    - {src: pve.yml.j2, dest: pve/pve.yml, when: "{{ stack_pve_exporter }}"}
-    - {src: snmp-auth.yml.j2, dest: snmp/auth.yml, when: "{{ stack_snmp }}"}
+    - {src: blackbox.yml.j2, dest: blackbox/blackbox.yml, owner: 0, mode: "0644", when: "{{ stack_blackbox }}"}
+    - {src: pve.yml.j2, dest: pve/pve.yml, owner: "{{ stack_uids.pve }}", mode: "0400", when: "{{ stack_pve_exporter }}"}        # API token
+    - {src: snmp-auth.yml.j2, dest: snmp/auth.yml, owner: 0, mode: "0600", when: "{{ stack_snmp }}"}                         # SNMP password
   when: item.when | bool
   loop_control: {label: "{{ item.dest }}"}
   notify: Restart stack
@@ -144,7 +150,9 @@
   ansible.builtin.copy:
     dest: "{{ stack_dir }}/pbs/token"
     content: "{{ pbs_api.token_value }}"
-    mode: "0644"
+    owner: "{{ stack_uids.pbs }}"
+    group: "{{ stack_uids.pbs }}"
+    mode: "0400"
   when: stack_pbs_exporter
   notify: Restart stack
 
@@ -172,7 +180,9 @@
       ansible.builtin.copy:
         dest: "{{ stack_dir }}/grafana/admin-password"
         content: "{{ grafana_admin_password }}"
-        mode: "0644"
+        owner: "{{ stack_uids.grafana }}"
+        group: "0"
+        mode: "0400"
 
 # ---------------------------------------------------------------------------
 # Compose
