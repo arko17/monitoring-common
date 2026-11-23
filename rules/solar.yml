@@ -1,0 +1,23 @@
+# RCT Power inverter (solar), only active where the rct exporter runs.
+groups:
+  - name: solar
+    interval: 1m
+    rules:
+      - alert: SolarInverterUnreadable
+        expr: rct_up == 0
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: the solar inverter cannot be read for 10 minutes"
+      - alert: SolarInverterFault
+        expr: max by (site, instance) (rct_fault_flags) > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.site }}: the solar inverter reports a fault (check the RCT app)"
+      - alert: SolarBatteryHealthLow
+        expr: rct_battery_soh_ratio < 0.7
+        for: 1d
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.site }}: solar battery health is {{ $value | humanizePercentage }}"

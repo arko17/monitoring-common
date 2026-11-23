@@ -148,6 +148,14 @@
   loop_control: {label: "{{ item.dest }}"}
   notify: Restart stack
 
+- name: RCT exporter sources
+  ansible.builtin.copy:
+    src: rct-exporter/
+    dest: "{{ stack_dir }}/rct-exporter/"
+    mode: "0644"
+  when: stack_rct_exporter
+  register: _rct_src
+
 - name: PBS token
   ansible.builtin.copy:
     dest: "{{ stack_dir }}/pbs/token"
@@ -196,6 +204,12 @@
     mode: "0644"
     validate: docker compose -f %s config --quiet
   register: _compose
+
+- name: Build RCT exporter image (sources changed)
+  ansible.builtin.command:
+    cmd: docker compose build rct
+    chdir: "{{ stack_dir }}"
+  when: stack_rct_exporter and _rct_src is changed
 
 - name: Start / update stack
   ansible.builtin.command:
