@@ -25,7 +25,18 @@
   hosts: workstations:&linux
   become: true
   tags: [agents]
-  ignore_unreachable: true   # workstations are often switched off; don't fail the weekly run
+  gather_facts: false
+  # Workstations are often switched off: skip them cleanly instead of failing the weekly run.
+  pre_tasks:
+    - name: Reachable?
+      ansible.builtin.ping:
+      ignore_unreachable: true
+      register: _ping
+    - name: Skip switched-off workstation
+      ansible.builtin.meta: end_host
+      when: _ping.unreachable | default(false)
+    - name: Gather facts
+      ansible.builtin.setup:
   roles: [beszel_agent]
 
 - name: Monitoring stack
