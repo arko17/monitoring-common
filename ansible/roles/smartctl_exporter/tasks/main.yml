@@ -30,7 +30,7 @@
 
           [Service]
           # needs root for raw disk access
-          ExecStart=/usr/local/bin/smartctl_exporter --web.listen-address={{ smartctl_exporter_listen }} --smartctl.interval=5m
+          ExecStart=/usr/local/bin/smartctl_exporter --web.listen-address={{ smartctl_exporter_listen }} --smartctl.interval=5m {{ smartctl_exporter_extra_flags | join(' ') }}
           Restart=always
 
           [Install]

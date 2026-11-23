@@ -1,3 +1,5 @@
 # renovate: datasource=github-releases depName=prometheus-community/smartctl_exporter
 smartctl_exporter_version: "0.15.0"
 smartctl_exporter_listen: "0.0.0.0:9633"
+# e.g. ["--smartctl.device-exclude=bus"] on hosts whose RAID controller lists each disk twice (Dell PERC: sdX + megaraid,N)
+smartctl_exporter_extra_flags: []
