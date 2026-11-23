@@ -10,12 +10,16 @@ groups:
         annotations:
           summary: "Alerting pipeline heartbeat"
 
+      # Short retries (hub restart, network blip) are normal: vmagent buffers and resends.
+      # Alert only when nothing gets through for 20 min, or a real backlog builds up.
       - alert: VmagentRemoteWriteFailing
-        expr: sum by (site, url) (rate(vmagent_remotewrite_retries_count_total[10m])) > 0
-        for: 30m
+        expr: |
+          sum by (site, url) (rate(vmagent_remotewrite_requests_total{status_code="2XX"}[10m])) == 0
+          or sum by (site, url) (vmagent_remotewrite_pending_data_bytes) > 100e6
+        for: 20m
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.site }}: vmagent cannot deliver to {{ $labels.url }} for 30 minutes (buffering on disk)"
+          summary: "{{ $labels.site }}: vmagent cannot deliver its data ({{ $labels.url }}) for 20 minutes, buffering on disk"
 
       - alert: MonitoringComponentDown
         expr: up{job=~"victoriametrics|vmagent|vmalert|alertmanager|grafana|blackbox|matrix-receiver"} == 0

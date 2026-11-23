@@ -59,17 +59,17 @@
     src: "{{ item.src }}"
     dest: "{{ hub_dir }}/{{ item.dest }}"
     mode: "0644"
-  loop:
-    - {src: Caddyfile.j2, dest: caddy/Caddyfile}
-    - {src: scrape.yml.j2, dest: vmagent/scrape.yml}
-    - {src: hub-rules.yml.j2, dest: rules/hub.yml}
-    - {src: alertmanager.yml.j2, dest: alertmanager/alertmanager.yml}
-    - {src: gatus.yaml.j2, dest: gatus/config.yaml}
-    - {src: ntfy-server.yml.j2, dest: ntfy/server.yml}
-    - {src: grafana-datasources.yml.j2, dest: grafana/provisioning/datasources/vm.yml}
-    - {src: grafana-dashboards.yml.j2, dest: grafana/provisioning/dashboards/common.yml}
+  loop:   # svc = the only container that needs a restart when this file changes
+    - {src: Caddyfile.j2, dest: caddy/Caddyfile, svc: caddy}
+    - {src: scrape.yml.j2, dest: vmagent/scrape.yml, svc: vmagent}
+    - {src: hub-rules.yml.j2, dest: rules/hub.yml, svc: vmalert}
+    - {src: alertmanager.yml.j2, dest: alertmanager/alertmanager.yml, svc: alertmanager}
+    - {src: gatus.yaml.j2, dest: gatus/config.yaml, svc: gatus}
+    - {src: ntfy-server.yml.j2, dest: ntfy/server.yml, svc: ntfy}
+    - {src: grafana-datasources.yml.j2, dest: grafana/provisioning/datasources/vm.yml, svc: grafana}
+    - {src: grafana-dashboards.yml.j2, dest: grafana/provisioning/dashboards/common.yml, svc: grafana}
   loop_control: {label: "{{ item.dest }}"}
-  notify: Restart hub
+  register: _hub_cfg
 
 # Common rules, re-scoped per site with extra_label=site=<name>:
 #   - "hub" itself (the VPS host + hub components), keeps the Watchdog
@@ -84,7 +84,7 @@
     {{ (['hub'] + (hub_sites | selectattr('evaluate_rules', 'defined') | selectattr('evaluate_rules') | map(attribute='name') | list))
        | product(query('ansible.builtin.fileglob', role_path ~ '/../../../rules/*.yml')) | list }}
   loop_control: {label: "{{ item.0 }}/{{ item.1 | basename }}"}
-  notify: Restart hub
+  register: _hub_rules
 
 - name: Dashboards
   ansible.builtin.copy:
@@ -110,3 +110,16 @@
     chdir: "{{ hub_dir }}"
   register: _up
   changed_when: "'Started' in _up.stderr or 'Recreated' in _up.stderr or 'Created' in _up.stderr"
+
+# Restart only the containers whose config changed (a Gatus change must not interrupt
+# the remote_write intake via Caddy/VictoriaMetrics).
+- name: Restart containers with changed config
+  ansible.builtin.command:
+    cmd: "docker compose restart {{ _restart | join(' ') }}"
+    chdir: "{{ hub_dir }}"
+  vars:
+    _restart: >-
+      {{ ((_hub_cfg.results | selectattr('changed') | map(attribute='item.svc') | list)
+          + (['vmalert'] if (_hub_rules.results | selectattr('changed') | list) else []))
+         | unique | list }}
+  when: _restart | length > 0
