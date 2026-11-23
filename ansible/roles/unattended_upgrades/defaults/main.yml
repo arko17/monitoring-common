@@ -1,0 +1,11 @@
+# Unattended upgrades for servers that must NOT reboot by themselves (Proxmox VE, PBS).
+uu_origins:
+  - "origin=Debian,codename=${distro_codename},label=Debian"
+  - "origin=Debian,codename=${distro_codename}-updates,label=Debian"
+  - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
+  - "origin=Debian,codename=${distro_codename},label=Debian-Security"
+  - "origin=Proxmox,codename=${distro_codename}"      # PVE + PBS (no-subscription / enterprise)
+uu_extra_origins: []
+uu_reboot: false
+# Daily upgrade time (systemd OnCalendar). Stagger cluster nodes so they never upgrade together.
+uu_upgrade_time: "*-*-* 06:00:00"

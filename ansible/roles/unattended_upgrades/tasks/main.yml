@@ -1,0 +1,50 @@
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name: [unattended-upgrades, apt-listchanges]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable daily list update + upgrade
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    content: |
+      // Managed by Ansible (monitoring: unattended_upgrades role)
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+- name: Upgrade policy
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52unattended-monitoring
+    mode: "0644"
+    content: |
+      // Managed by Ansible (monitoring: unattended_upgrades role)
+      Unattended-Upgrade::Origins-Pattern {
+      {% for o in uu_origins + uu_extra_origins %}
+              "{{ o }}";
+      {% endfor %}
+      };
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "false";   // keep old kernels until the manual reboot
+      Unattended-Upgrade::Remove-Unused-Dependencies "false";
+      Unattended-Upgrade::Automatic-Reboot "{{ uu_reboot | bool | lower }}";
+      Dpkg::Options { "--force-confdef"; "--force-confold"; };
+
+- name: Timer drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/apt-daily-upgrade.timer.d
+    state: directory
+    mode: "0755"
+
+- name: Staggered upgrade time
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/monitoring.conf
+    mode: "0644"
+    content: |
+      # Managed by Ansible: staggered daily upgrade time
+      [Timer]
+      OnCalendar=
+      OnCalendar={{ uu_upgrade_time }}
+      RandomizedDelaySec=10min
+  notify: Reload apt-daily-upgrade timer

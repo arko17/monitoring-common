@@ -21,6 +21,12 @@
   tags: [exporters]
   roles: [wireguard_metrics]
 
+- name: Unattended upgrades on hypervisors and backup servers (no automatic reboot)
+  hosts: pve_hosts:pbs_hosts
+  become: true
+  tags: [updates]
+  roles: [unattended_upgrades]
+
 - name: Beszel agent on Linux workstations
   hosts: workstations:&linux
   become: true
