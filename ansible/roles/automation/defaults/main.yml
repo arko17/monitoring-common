@@ -8,3 +8,8 @@ automation_weekly_time: "Mon *-*-* 04:30:00"
 # healthchecks.io ping URLs (one check per job, period 1d / 7d)
 automation_hc_nightly_url: ""
 automation_hc_weekly_url: ""
+
+# OS updates of the stack host itself (monitoring containers / hub VPS).
+automation_unattended_upgrades: true          # set false on shared hosts that manage this themselves (qusp)
+automation_weekly_reboot: false               # unconditional weekly reboot window
+automation_reboot_time: "Sun *-*-* 05:00:00"  # systemd OnCalendar, host time zone

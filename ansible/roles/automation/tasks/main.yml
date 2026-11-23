@@ -53,6 +53,74 @@
       deploy key of this repo and re-run. ({{ _clone.msg | default('') }})
   when: not (_clone.skipped | default(false)) and _clone.after is not defined
 
+- name: Unattended upgrades
+  when: automation_unattended_upgrades | bool
+  block:
+    - name: Install unattended-upgrades
+      ansible.builtin.apt:
+        name: [unattended-upgrades, apt-listchanges]
+        state: present
+    - name: Enable daily list update + upgrade
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: "0644"
+        content: |
+          // Managed by Ansible (monitoring automation role)
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+    - name: Local unattended-upgrades policy
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/52unattended-monitoring
+        mode: "0644"
+        content: |
+          // Managed by Ansible (monitoring automation role)
+          // Security and regular stable updates; Docker packages are added by the docker role.
+          Unattended-Upgrade::Origins-Pattern {
+                  "origin=Debian,codename=${distro_codename},label=Debian";
+                  "origin=Debian,codename=${distro_codename}-updates,label=Debian";
+                  "origin=Debian,codename=${distro_codename},label=Debian-Security";
+                  "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+          };
+          Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          // Reboots happen in the weekly window below, not ad hoc.
+          Unattended-Upgrade::Automatic-Reboot "false";
+          Dpkg::Options { "--force-confdef"; "--force-confold"; };
+
+- name: Weekly reboot window
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: monitoring-reboot.service
+      content: |
+        [Unit]
+        Description=Weekly reboot of the monitoring host (picks up library/systemd updates)
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/systemctl reboot
+    - name: monitoring-reboot.timer
+      content: |
+        [Unit]
+        Description=Weekly reboot of the monitoring host
+        [Timer]
+        OnCalendar={{ automation_reboot_time }}
+        RandomizedDelaySec=10min
+        [Install]
+        WantedBy=timers.target
+  loop_control: {label: "{{ item.name }}"}
+  when: automation_weekly_reboot | bool
+
+- name: Weekly reboot timer state
+  ansible.builtin.systemd_service:
+    name: monitoring-reboot.timer
+    enabled: "{{ automation_weekly_reboot | bool }}"
+    state: "{{ 'started' if automation_weekly_reboot | bool else 'stopped' }}"
+    daemon_reload: true
+  failed_when: false   # timer may not exist when disabled
+
 - name: Runner script
   ansible.builtin.template:
     src: monitoring-run.sh.j2
