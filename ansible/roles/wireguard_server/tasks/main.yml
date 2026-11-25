@@ -1,0 +1,30 @@
+- name: Validate WireGuard server configuration
+  ansible.builtin.assert:
+    that:
+      - wireguard_server_address | length > 0
+      - wireguard_server_private_key | length == 44
+      - wireguard_server_peers | map(attribute='public_key') | select('match', '^[A-Za-z0-9+/]{43}=$') | list | length == wireguard_server_peers | length
+    fail_msg: "Incomplete WireGuard config (address, 44-char private key, valid peer public keys)."
+
+- name: Install wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: WireGuard config
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "/etc/wireguard/{{ wireguard_server_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart WireGuard
+
+- name: Enable WireGuard
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ wireguard_server_interface }}"
+    enabled: true
+    state: started
+  ignore_errors: "{{ ansible_check_mode }}"   # unit only exists once wireguard-tools is installed

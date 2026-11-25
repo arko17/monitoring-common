@@ -1,0 +1,11 @@
+# ---------------------------------------------------------------------------
+# WireGuard server (wg-quick). Peers dial in; nothing else is routed or NATed.
+# Used by the hub to reach services at home (e.g. Home Assistant) through a
+# tunnel the home side opens, so no inbound ports are needed at home.
+# ---------------------------------------------------------------------------
+wireguard_server_interface: wg0
+wireguard_server_address: ""          # e.g. 10.77.0.1/24
+wireguard_server_port: 51820          # UDP, must be open in any cloud firewall
+wireguard_server_private_key: ""      # vault
+wireguard_server_peers: []
+#  - {name: homeassistant, public_key: "...", allowed_ips: "10.77.0.2/32"}

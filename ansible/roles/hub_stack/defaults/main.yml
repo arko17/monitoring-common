@@ -15,6 +15,10 @@ hub_hosts:
   status: "status.{{ hub_domain }}"
   beszel: "beszel.{{ hub_domain }}"
 
+# Extra sites Caddy proxies to (TLS automatic), e.g. services at home reached via WireGuard.
+hub_proxies: []
+#  - {host: "ha.{{ hub_domain }}", upstream: "10.77.0.2:8123", comment: "Home Assistant (WireGuard)"}
+
 hub_images:
   caddy: caddy:2.11.9
   victoriametrics: victoriametrics/victoria-metrics:v1.156.0

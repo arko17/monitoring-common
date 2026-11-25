@@ -44,3 +44,10 @@
 {{ hub_hosts.beszel }} {
 	reverse_proxy beszel:8090
 }
+{% for p in hub_proxies %}
+
+# {{ p.comment | default('extra site') }}
+{{ p.host }} {
+	reverse_proxy {{ p.upstream }}
+}
+{% endfor %}
