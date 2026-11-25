@@ -7,6 +7,9 @@ wireguard_server_interface: wg0
 wireguard_server_address: ""          # e.g. 10.77.0.1/24
 wireguard_server_port: 51820          # UDP, must be open in any cloud firewall
 wireguard_server_private_key: ""      # vault
+# Tunnel MTU; empty = wg-quick default (1420). Lower it when a peer sits behind DS-Lite or
+# similar (path MTU < 1500): 1280 always fits.
+wireguard_server_mtu: ""
 # Let peers reach each other through the server (hub-and-spoke, e.g. phone -> HA).
 # Adds a FORWARD accept for wg0 -> wg0 only (Docker's FORWARD policy is DROP); no NAT,
 # no access to anything else on the host's networks.

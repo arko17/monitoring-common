@@ -3,6 +3,9 @@
 Address = {{ wireguard_server_address }}
 ListenPort = {{ wireguard_server_port }}
 PrivateKey = {{ wireguard_server_private_key }}
+{% if wireguard_server_mtu %}
+MTU = {{ wireguard_server_mtu }}
+{% endif %}
 {% if wireguard_server_forward_between_peers %}
 PostUp = iptables -I FORWARD -i %i -o %i -j ACCEPT
 PostDown = iptables -D FORWARD -i %i -o %i -j ACCEPT
