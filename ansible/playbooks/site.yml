@@ -50,6 +50,8 @@
   become: true
   tags: [stack]
   roles:
-    - docker
+    - role: docker
+      vars:
+        docker_compose_dir: "{{ stack_dir | default('/opt/monitoring') }}"
     - monitoring_stack
     - automation

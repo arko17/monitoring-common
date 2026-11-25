@@ -1,1 +1,5 @@
 docker_users: []
+# Compose project brought up again whenever Docker (re)starts, e.g. after an
+# unattended docker-ce upgrade. Docker's restart policy alone is not reliable
+# for that (2026-11-25: vmagent stayed "Exited (0)" after a docker-ce upgrade).
+docker_compose_dir: ""

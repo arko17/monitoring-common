@@ -34,3 +34,36 @@
     name: docker
     enabled: true
     state: started
+
+- name: Unit that brings the compose stack up whenever Docker starts
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/compose-stack.service
+    mode: "0644"
+    content: |
+      # Managed by Ansible (common/ansible/roles/docker)
+      [Unit]
+      Description=docker compose up -d in {{ docker_compose_dir }} (also after Docker restarts/upgrades)
+      Requires=docker.service
+      After=docker.service network-online.target
+      # restart/stop of docker.service propagates here, so the stack is re-upped every time
+      PartOf=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory={{ docker_compose_dir }}
+      ExecStartPre=/bin/sleep 5
+      ExecStart=/usr/bin/docker compose up -d
+      TimeoutStartSec=600
+
+      [Install]
+      WantedBy=docker.service multi-user.target
+  register: _compose_unit
+  when: docker_compose_dir | length > 0
+
+- name: Enable the compose-stack unit
+  ansible.builtin.systemd_service:
+    name: compose-stack.service
+    enabled: true
+    daemon_reload: "{{ _compose_unit is changed }}"
+  when: docker_compose_dir | length > 0
