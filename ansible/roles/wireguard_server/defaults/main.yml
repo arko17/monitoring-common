@@ -7,5 +7,9 @@ wireguard_server_interface: wg0
 wireguard_server_address: ""          # e.g. 10.77.0.1/24
 wireguard_server_port: 51820          # UDP, must be open in any cloud firewall
 wireguard_server_private_key: ""      # vault
+# Let peers reach each other through the server (hub-and-spoke, e.g. phone -> HA).
+# Adds a FORWARD accept for wg0 -> wg0 only (Docker's FORWARD policy is DROP); no NAT,
+# no access to anything else on the host's networks.
+wireguard_server_forward_between_peers: false
 wireguard_server_peers: []
 #  - {name: homeassistant, public_key: "...", allowed_ips: "10.77.0.2/32"}

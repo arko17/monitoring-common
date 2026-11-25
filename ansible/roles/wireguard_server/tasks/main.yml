@@ -13,6 +13,20 @@
     update_cache: true
     cache_valid_time: 3600
 
+# builtin only: the hub's nightly ansible-pull has ansible-core, no ansible.posix
+- name: IPv4 forwarding (peer-to-peer through the server)
+  when: wireguard_server_forward_between_peers
+  block:
+    - name: Persist net.ipv4.ip_forward
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/60-wireguard.conf
+        mode: "0644"
+        content: "net.ipv4.ip_forward = 1\n"
+    - name: Apply net.ipv4.ip_forward
+      ansible.builtin.command: sysctl -w net.ipv4.ip_forward=1
+      register: _fwd
+      changed_when: false
+
 - name: WireGuard config
   ansible.builtin.template:
     src: wg.conf.j2
